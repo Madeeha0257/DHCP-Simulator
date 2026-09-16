@@ -53,29 +53,47 @@ class DHCPServer:
 
         return True
 
+def log_message(message):
+    message_log.config(state = "normal")
+    message_log.insert(tk.END, message + "\n")
+    message_log.config(state = "disabled")
+    message_log.see(tk.END)
+
 def request_ip():
     client_id = client_entry.get()
 
     if client_id == "":
-        print("Please enter a Client ID.")
+        log_message("[ERROR] Please enter a Client ID.")
         return
 
+    #DHCP Discover
+    log_message(f"[DISCOVER] Client {client_id} is requesting an IP")
     offered_ip = server.discover(client_id)
 
     if offered_ip is None:
-        print("No available IP addresses")
+        log_message("[ERROR] No available IP addresses")
         return
+
+    #DHCP Offer
+    log_message(f"[OFFER] Server offers IP: {offered_ip}")
+
+    #DHCP Request
+    log_message(f"[REQUEST] Client {client_id} requests {offered_ip}")
 
     success = server.request(client_id, offered_ip)
 
     if success:
-        print(f"[ACK] IP {offered_ip} assigned to {client_id}")
+        #DHCP Acknowledgement
+        log_message(f"[ACK] IP {offered_ip} assigned to {client_id}")
 
         #Add client and IP to GUI table
         ip_table.insert("", "end", values=(client_id, offered_ip))
 
         #Clear the input box
         client_entry.delete(0, tk.END)
+
+    else:
+        log_message("[NAK] IP address is not available")
 
 #Create DHCP Server
 server = DHCPServer()
@@ -131,6 +149,14 @@ ip_table.column("Client ID", width = 200)
 ip_table.column("Assigned IP", width = 200)
 
 ip_table.pack(pady=10)
+
+#Message log handling
+log_label = tk.Label(root, text="DHCP Message Log", font=("Arial", 14, "bold"))
+log_label.pack(pady=(20, 5))
+
+#Message log text box
+message_log = tk.Text(root, height = 8, width = 70, state = "disabled")
+message_log.pack(pady=10)
 
 #Start GUI Event loop
 root.mainloop()
