@@ -5,6 +5,8 @@ import random
 
 class DHCPServer:
     def __init__(self):
+        self.server_ip = "192.168.1.1"
+
         self.ip_pool = [
             "192.168.1.100",
             "192.168.1.101",
@@ -53,7 +55,7 @@ class DHCPServer:
     #Simulating DHCP Request
     def request(self, client_id, requested_ip):
 
-        print(f"[REQUEST] Client {client_id} req")
+        print(f"[REQUEST] Client {client_id} requests {requested_ip}")
 
         # If client has IP, renew its lease
         if client_id in self.allocated_ips:
@@ -114,14 +116,19 @@ def log_message(message):
     message_log.see(tk.END)
 
 def request_ip():
-    client_id = client_entry.get()
+    client_id = client_entry.get().strip()
 
     if client_id == "":
         log_message("[ERROR] Please enter a Client ID.")
         return
 
+    #Get or generate client's MAC Address
+    mac_address = server.get_mac_address(client_id)
+
     #DHCP Discover
     log_message(f"[DISCOVER] Client {client_id} is requesting an IP")
+    log_message(f"           Client MAC: {mac_address}")
+
     offered_ip = server.discover(client_id)
 
     if offered_ip is None:
@@ -130,26 +137,29 @@ def request_ip():
 
     #DHCP Offer
     log_message(f"[OFFER] Server offers IP: {offered_ip}")
+    log_message(f"         Server IP: {server.server_ip}")
 
     #DHCP Request
     log_message(f"[REQUEST] Client {client_id} requests {offered_ip}")
+    log_message(f"          Client MAC: {mac_address}")
 
     success = server.request(client_id, offered_ip)
-
-    mac_address = server.get_mac_address(client_id)
 
     if success:
 
         #Add client, IP, remaining time to GUI table
         remaining_time = server.get_remaining_time(client_id)
-
+    
         #If client already exists, update its row
         if ip_table.exists(client_id):
             ip_table.item(client_id, values = (client_id, mac_address, offered_ip, f"{remaining_time} seconds"))
-            log_message(f"[RENEW] Lease renewed for {client_id}")
+            log_message(f"[ACK] Lease renewed for {client_id}")
+            log_message(f"      IP Address: {offered_ip}")
+            log_message(f"      Lease Duration: {server.lease_duration} seconds")
         else:
-            #DHCP Acknowledgement
             log_message(f"[ACK] IP {offered_ip} assigned to {client_id}")
+            log_message(f"      Lease Duration: {server.lease_duration} seconds")
+            
             ip_table.insert("", "end", iid = client_id, values=(client_id, mac_address, offered_ip, f"{remaining_time} seconds"))
 
         #Clear the input box
@@ -258,10 +268,10 @@ ip_table.heading("Assigned IP", text="Assigned IP")
 ip_table.heading("Lease Remaining", text = "Lease Remaining")
 
 #Configure column width
-ip_table.column("Client ID", width = 130)
-ip_table.column("MAC Address", width = 180)
-ip_table.column("Assigned IP", width = 150)
-ip_table.column("Lease Remaining", width = 150)
+ip_table.column("Client ID", width = 100)
+ip_table.column("MAC Address", width = 150)
+ip_table.column("Assigned IP", width = 130)
+ip_table.column("Lease Remaining", width = 120)
 ip_table.pack(pady=10)
 
 #Message log handling
