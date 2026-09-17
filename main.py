@@ -6,6 +6,9 @@ import random
 class DHCPServer:
     def __init__(self):
         self.server_ip = "192.168.1.1"
+        self.subnet_mask = "255.255.255.0"
+        self.gateway = "192.168.1.1"
+        self.dns_server = "8.8.8.8"
 
         self.ip_pool = [
             "192.168.1.100",
@@ -168,6 +171,54 @@ def request_ip():
     else:
         log_message("[NAK] IP address is not available")
 
+def show_client_configuration():
+    selected_item = ip_table.selection()
+
+    if not selected_item:
+        log_message("[ERROR] Please select a client to view configuration")
+        return 
+
+    item = selected_item[0]
+    values = ip_table.item(item, "values")
+
+    client_id = values[0]
+    mac_address = values[1]
+    assigned_ip = values[2]
+
+    remaining_time = server.get_remaining_time(client_id)
+
+    #Create new window for configuration details
+    configuration_window = tk.Toplevel(root)
+    configuration_window.title("Client Configuration")
+    configuration_window.geometry("500x400")
+
+    #Window heading
+    configuration_label = tk.Label(configuration_window, text = "Client Configuration", font = ("Arial", 16, "bold"))
+
+    configuration_text = (
+        "Client Configuration\n"
+        f"Client ID:           {client_id}\n"
+        f"MAC Address:         {mac_address}\n"
+        f"Assigned IP:         {assigned_ip}\n"
+        f"Subnet Mask:         {server.subnet_mask}\n"
+        f"Default Gateway:     {server.gateway}\n"
+        f"DNS Server:          {server.dns_server}\n"
+        f"Lease Duration:      {server.lease_duration} seconds\n"
+        f"Lease Remaining:     {remaining_time} seconds\n"
+    )
+
+    #Text box inside new window
+    configuration_log = tk.Text(configuration_window, height = 12, width = 55, state = "normal")
+    configuration_log.pack(padx = 20, pady = 10)
+
+    configuration_log.insert(tk.END, configuration_text)
+
+    configuration_log.config(state = "disabled")
+
+    #Close button
+    close_button = tk.Button(configuration_window, text = "Close", command = configuration_window.destroy)
+    close_button.pack(pady=10)
+
 def release_selected_ip():
     selected_item = ip_table.selection()
 
@@ -222,10 +273,10 @@ root = tk.Tk()
 root.title("DHCP Simulator")
 
 #Window size
-root.geometry("700x500")
+root.geometry("800x800")
 
 #Preventing small resizing
-root.minsize(500,400)
+root.minsize(600,650)
 
 #Creating a heading
 title_label = tk.Label(root, text = "DHCP Simulator", font = ("Arial", 20, "bold"))
@@ -251,6 +302,10 @@ request_button.pack(pady=15)
 #Release IP button
 release_button = tk.Button(root, text = "Release Selected IP", command = release_selected_ip)
 release_button.pack(pady=5)
+
+#View configuration button
+configuration_button = tk.Button(root, text = "View Client Configuration", command = show_client_configuration)
+configuration_button.pack(pady=5)
 
 #Allocated IP table heading
 table_label = tk.Label(root, text = "Allocated IP Addresses", font = ("Arial", 14, "bold"))
