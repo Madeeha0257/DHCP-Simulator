@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+import time
 
 class DHCPServer:
     def __init__(self):
@@ -11,6 +12,8 @@ class DHCPServer:
         ]
 
         self.allocated_ips = {}
+        self.leases = {}
+        self.lease_duration = 20
 
     #Simulating DHCP Discover
     def discover(self, client_id):
@@ -29,12 +32,22 @@ class DHCPServer:
 
         print(f"[OFFER] Server offers IP: {offered_ip}")
 
-        return self.ip_pool[0]
+        return offered_ip
 
     #Simulating DHCP Request
     def request(self, client_id, requested_ip):
 
         print(f"[REQUEST] Client {client_id} req")
+
+        # If client has IP, renew its lease
+        if client_id in self.allocated_ips:
+            existing_ip = self.allocated_ips[client_id]
+
+            if existing_ip == requested_ip:
+                self.leases[client_id] = time.time() + self.lease_duration
+
+                print(f"[RENEW] Lease renewed for {client_id}")
+                return True
 
         if requested_ip not in self.ip_pool:
             print("IP Address is not available")
@@ -42,6 +55,9 @@ class DHCPServer:
 
         self.ip_pool.remove(requested_ip)
         self.allocated_ips[client_id] = requested_ip
+
+        #Store lease expiry time
+        self.leases[client_id] = time.time() + self.lease_duration
 
         print(f"[ACK] IP {requested_ip} assigned to {client_id}")
 
@@ -52,9 +68,28 @@ class DHCPServer:
             return None
 
         released_ip = self.allocated_ips.pop(client_id)
+        self.leases.pop(client_id, None)
         self.ip_pool.insert(0, released_ip)
 
-        return self.release_ip
+        return released_ip
+
+    def get_remaining_time(self, client_id):
+        if client_id not in self.leases:
+            return 0
+
+        remaining_time = int(self.leases[client_id] - time.time())
+
+        return max(0, remaining_time)
+
+    def check_expired_leases(self):
+        expired_clients = []
+
+        for client_id in list(self.allocated_ips.keys()):
+            if self.get_remaining_time(client_id) <= 0:
+                expired_clients.append(client_id)
+
+        return expired_clients
+
 
 def log_message(message):
     message_log.config(state = "normal")
@@ -86,11 +121,18 @@ def request_ip():
     success = server.request(client_id, offered_ip)
 
     if success:
-        #DHCP Acknowledgement
-        log_message(f"[ACK] IP {offered_ip} assigned to {client_id}")
 
-        #Add client and IP to GUI table
-        ip_table.insert("", "end", values=(client_id, offered_ip))
+        #Add client, IP, remaining time to GUI table
+        remaining_time = server.get_remaining_time(client_id)
+
+        #If client already exists, update its row
+        if ip_table.exists(client_id):
+            ip_table.item(client_id, values = (client_id, offered_ip, f"{remaining_time} seconds"))
+            log_message(f"[RENEW] Lease renewed for {client_id}")
+        else:
+            #DHCP Acknowledgement
+            log_message(f"[ACK] IP {offered_ip} assigned to {client_id}")
+            ip_table.insert("", "end", iid = client_id, values=(client_id, offered_ip, f"{remaining_time} seconds"))
 
         #Clear the input box
         client_entry.delete(0, tk.END)
@@ -115,6 +157,31 @@ def release_selected_ip():
         log_message(f"[RELEASE] Client {client_id} released IP Address {released_ip}")
     else:
         log_message(f"[ERROR] No IP allocation found for client {client_id}")
+
+def update_leases():
+    expired_clients = server.check_expired_leases()
+
+    for client_id in expired_clients:
+        expired_ip = server.release_ip(client_id)
+
+        if ip_table.exists(client_id):
+            ip_table.delete(client_id)
+
+        log_message(f"[EXPIRED] Lease for {client_id} expired")
+
+        log_message(f"[RELEASE] IP Address {expired_ip} returned to the pool")
+
+    #Update remaining lease time in the tabl
+    for client_id in list(server.allocated_ips.keys()):
+        if ip_table.exists(client_id):
+            item_values = ip_table.item(client_id, "values")
+
+            ip_address = item_values[1]
+            remaining_time = server.get_remaining_time(client_id)
+
+            ip_table.item(client_id, values = (client_id, ip_address, f"{remaining_time} seconds"))
+
+    root.after(1000, update_leases)
 
 #Create DHCP Server
 server = DHCPServer()
@@ -161,18 +228,19 @@ table_label = tk.Label(root, text = "Allocated IP Addresses", font = ("Arial", 1
 table_label.pack(pady=(20, 5))
 
 #Create the table
-columns = ("Client ID", "Assigned IP")
+columns = ("Client ID", "Assigned IP", "Lease Remaining")
 
 ip_table = ttk.Treeview(root, columns = columns, show = "headings", height = 5)
 
 #Configure column headings
 ip_table.heading("Client ID", text="Client ID")
 ip_table.heading("Assigned IP", text="Assigned IP")
+ip_table.heading("Lease Remaining", text = "Lease Remaining")
 
 #Configure column width
 ip_table.column("Client ID", width = 200)
 ip_table.column("Assigned IP", width = 200)
-
+ip_table.column("Lease Remaining", width = 150)
 ip_table.pack(pady=10)
 
 #Message log handling
@@ -182,6 +250,9 @@ log_label.pack(pady=(20, 5))
 #Message log text box
 message_log = tk.Text(root, height = 8, width = 70, state = "disabled")
 message_log.pack(pady=10)
+
+#Start automatic lease checking
+root.after(1000, update_leases)
 
 #Start GUI Event loop
 root.mainloop()
