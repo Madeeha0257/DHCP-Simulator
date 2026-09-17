@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 import time
+import random
 
 class DHCPServer:
     def __init__(self):
@@ -13,7 +14,22 @@ class DHCPServer:
 
         self.allocated_ips = {}
         self.leases = {}
+        self.client_macs = {}
         self.lease_duration = 20
+
+    def generate_mac_address(self):
+        mac_parts = []
+
+        for _ in range(6):
+            mac_parts.append(f"{random.randint(0, 255):02X}")
+
+        return ":".join(mac_parts)
+
+    def get_mac_address(self, client_id):
+        if client_id not in self.client_macs:
+            self.client_macs[client_id] = self.generate_mac_address()
+
+        return self.client_macs[client_id]
 
     #Simulating DHCP Discover
     def discover(self, client_id):
@@ -120,6 +136,8 @@ def request_ip():
 
     success = server.request(client_id, offered_ip)
 
+    mac_address = server.get_mac_address(client_id)
+
     if success:
 
         #Add client, IP, remaining time to GUI table
@@ -127,12 +145,12 @@ def request_ip():
 
         #If client already exists, update its row
         if ip_table.exists(client_id):
-            ip_table.item(client_id, values = (client_id, offered_ip, f"{remaining_time} seconds"))
+            ip_table.item(client_id, values = (client_id, mac_address, offered_ip, f"{remaining_time} seconds"))
             log_message(f"[RENEW] Lease renewed for {client_id}")
         else:
             #DHCP Acknowledgement
             log_message(f"[ACK] IP {offered_ip} assigned to {client_id}")
-            ip_table.insert("", "end", iid = client_id, values=(client_id, offered_ip, f"{remaining_time} seconds"))
+            ip_table.insert("", "end", iid = client_id, values=(client_id, mac_address, offered_ip, f"{remaining_time} seconds"))
 
         #Clear the input box
         client_entry.delete(0, tk.END)
@@ -176,10 +194,11 @@ def update_leases():
         if ip_table.exists(client_id):
             item_values = ip_table.item(client_id, "values")
 
-            ip_address = item_values[1]
+            mac_address = item_values[1]
+            ip_address = item_values[2]
             remaining_time = server.get_remaining_time(client_id)
 
-            ip_table.item(client_id, values = (client_id, ip_address, f"{remaining_time} seconds"))
+            ip_table.item(client_id, values = (client_id, mac_address, ip_address, f"{remaining_time} seconds"))
 
     root.after(1000, update_leases)
 
@@ -228,18 +247,20 @@ table_label = tk.Label(root, text = "Allocated IP Addresses", font = ("Arial", 1
 table_label.pack(pady=(20, 5))
 
 #Create the table
-columns = ("Client ID", "Assigned IP", "Lease Remaining")
+columns = ("Client ID", "MAC Address", "Assigned IP", "Lease Remaining")
 
 ip_table = ttk.Treeview(root, columns = columns, show = "headings", height = 5)
 
 #Configure column headings
 ip_table.heading("Client ID", text="Client ID")
+ip_table.heading("MAC Address", text = "MAC Address")
 ip_table.heading("Assigned IP", text="Assigned IP")
 ip_table.heading("Lease Remaining", text = "Lease Remaining")
 
 #Configure column width
-ip_table.column("Client ID", width = 200)
-ip_table.column("Assigned IP", width = 200)
+ip_table.column("Client ID", width = 130)
+ip_table.column("MAC Address", width = 180)
+ip_table.column("Assigned IP", width = 150)
 ip_table.column("Lease Remaining", width = 150)
 ip_table.pack(pady=10)
 
