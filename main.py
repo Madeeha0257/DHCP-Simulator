@@ -8,7 +8,6 @@ class DHCPServer:
             "192.168.1.101",
             "192.168.1.102",
             "192.168.1.103",
-
         ]
 
         self.allocated_ips = {}
@@ -19,21 +18,18 @@ class DHCPServer:
 
         if client_id in self.allocated_ips:
             ip = self.allocated_ips[client_id]
-
             print(f"[INFO] Client already has IP: {ip}")
-
             return ip
 
         if len(self.ip_pool) == 0:
             print("[ERROR] No available IP addresses.")
-
             return None
 
         offered_ip = self.ip_pool[0]
 
         print(f"[OFFER] Server offers IP: {offered_ip}")
 
-        return offered_ip
+        return self.ip_pool[0]
 
     #Simulating DHCP Request
     def request(self, client_id, requested_ip):
@@ -42,16 +38,23 @@ class DHCPServer:
 
         if requested_ip not in self.ip_pool:
             print("IP Address is not available")
-
             return False
 
         self.ip_pool.remove(requested_ip)
-
         self.allocated_ips[client_id] = requested_ip
 
         print(f"[ACK] IP {requested_ip} assigned to {client_id}")
 
         return True
+
+    def release_ip(self, client_id):
+        if client_id not in self.allocated_ips:
+            return None
+
+        released_ip = self.allocated_ips.pop(client_id)
+        self.ip_pool.insert(0, released_ip)
+
+        return self.release_ip
 
 def log_message(message):
     message_log.config(state = "normal")
@@ -95,6 +98,24 @@ def request_ip():
     else:
         log_message("[NAK] IP address is not available")
 
+def release_selected_ip():
+    selected_item = ip_table.selection()
+
+    if not selected_item:
+        log_message("[ERROR] Please select a client to release its IP")
+        return
+
+    item = selected_item[0]
+    client_id = ip_table.item(item, "values")[0]
+
+    released_ip = server.release_ip(client_id)
+
+    if released_ip is not None:
+        ip_table.delete(item)
+        log_message(f"[RELEASE] Client {client_id} released IP Address {released_ip}")
+    else:
+        log_message(f"[ERROR] No IP allocation found for client {client_id}")
+
 #Create DHCP Server
 server = DHCPServer()
 
@@ -130,6 +151,10 @@ client_entry.pack(pady=5)
 #Request IP button
 request_button = tk.Button(root, text="Request IP Address", font = ("Arial", 12), width = 20, command = request_ip)
 request_button.pack(pady=15)
+
+#Release IP button
+release_button = tk.Button(root, text = "Release Selected IP", command = release_selected_ip)
+release_button.pack(pady=5)
 
 #Allocated IP table heading
 table_label = tk.Label(root, text = "Allocated IP Addresses", font = ("Arial", 14, "bold"))
