@@ -295,17 +295,21 @@ client_label.pack(pady=(30,5))
 client_entry = tk.Entry(root, font = ("Arial"), width=30)
 client_entry.pack(pady=5)
 
+#Button frame
+button_frame = tk.Frame(root)
+button_frame.pack(pady=15)
+
 #Request IP button
-request_button = tk.Button(root, text="Request IP Address", font = ("Arial", 12), width = 20, command = request_ip)
-request_button.pack(pady=15)
+request_button = tk.Button(button_frame, text = "Request IP Address", font = ("Arial", 12), width = 20, command = request_ip)
+request_button.grid(row = 0, column = 0, padx = 5)
 
 #Release IP button
-release_button = tk.Button(root, text = "Release Selected IP", command = release_selected_ip)
-release_button.pack(pady=5)
+release_button = tk.Button(button_frame, text = "Release Selected IP", fon= ("Arial", 12), width = 20, command = release_selected_ip)
+release_button.grid(row = 0, column = 1, padx = 5)
 
 #View configuration button
-configuration_button = tk.Button(root, text = "View Client Configuration", command = show_client_configuration)
-configuration_button.pack(pady=5)
+configuration_button = tk.Button(button_frame, text = "View Client Configuration", width = 23, command = show_client_configuration)
+configuration_button.grid(row = 0, column = 2, padx = 5)
 
 #Allocated IP table heading
 table_label = tk.Label(root, text = "Allocated IP Addresses", font = ("Arial", 14, "bold"))
