@@ -337,9 +337,20 @@ ip_table.pack(pady=10)
 log_label = tk.Label(root, text="DHCP Message Log", font=("Arial", 14, "bold"))
 log_label.pack(pady=(20, 5))
 
+#Message log frame
+message_log_frame = tk.Frame(root)
+message_log_frame.pack(pady = 10)
+
 #Message log text box
-message_log = tk.Text(root, height = 8, width = 70, state = "disabled")
-message_log.pack(pady=10)
+message_log = tk.Text(message_log_frame, height = 8, width = 70, state = "disabled", wrap = "word")
+message_log.grid(row = 0, column = 0)
+
+#Message log scrollbar
+message_scrollbar = tk.Scrollbar(message_log_frame, orient = "vertical", command = message_log.yview)
+message_scrollbar.grid(row = 0, column = 1, sticky = "ns")
+
+#Connect text box to scrollbar
+message_log.config(yscrollcommand = message_scrollbar.set)
 
 #Start automatic lease checking
 root.after(1000, update_leases)
