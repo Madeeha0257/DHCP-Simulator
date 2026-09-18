@@ -118,6 +118,11 @@ def log_message(message):
     message_log.config(state = "disabled")
     message_log.see(tk.END)
 
+def clear_message_log():
+    message_log.config(state = "normal")
+    message_log.delete("1.0", tk.END)
+    message_log.config(state = "disabled")
+
 def request_ip():
     client_id = client_entry.get().strip()
 
@@ -365,6 +370,9 @@ message_scrollbar.grid(row = 0, column = 1, sticky = "ns")
 
 #Connect text box to scrollbar
 message_log.config(yscrollcommand = message_scrollbar.set)
+
+clear_log_button = tk.Button(root, text = "Clear Message Log", command = clear_message_log)
+clear_log_button.pack(pady=(0, 15))
 
 #Start automatic lease checking
 root.after(1000, update_leases)
