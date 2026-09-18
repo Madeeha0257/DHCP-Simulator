@@ -279,6 +279,12 @@ class DHCPClient:
         self.selected_server = None
         self.offers = []
 
+        # Lease timer information
+        self.lease_start_time = None
+        self.lease_duration = None
+        self.t1_time = None
+        self.t2_time = None
+
     def assign_mac(self, mac_address):
         self.mac_address = mac_address
 
@@ -291,15 +297,29 @@ class DHCPClient:
         self.ip_address = offer.offered_ip
         self.state = DHCPClientState.REQUESTING
 
-    def receive_ack(self, ip_address):
+    def receive_ack(self, ip_address, lease_duration=60):
         self.ip_address = ip_address
         self.state = DHCPClientState.BOUND
+
+        self.lease_start_time = time.time()
+        self.lease_duration = lease_duration
+
+        # T1: 50% of lease duration
+        self.t1_time = self.lease_start_time + (lease_duration * 0.5)
+
+        # T2: 87.5% of lease duration
+        self.t2_time = self.lease_start_time + (lease_duration * 0.875)
 
     def reset(self):
         self.ip_address = None
         self.state = DHCPClientState.INIT
         self.selected_server = None
         self.offers.clear()
+
+        self.lease_start_time = None
+        self.lease_duration = None
+        self.t1_time = None
+        self.t2_time = None
 
     def start_renewing(self):
         """
@@ -347,7 +367,45 @@ class DHCPClient:
         """
         The lease expired without successful renewal.
         """
-        self.ip = None
+        self.ip_address = None
         self.selected_server = None
+        self.lease_start_time = None
+        self.lease_duration = None
+        self.t1_time = None
+        self.t2_time = None
         self.state = DHCPClientState.INIT
+
         return True
+
+    def get_remaining_lease_time(self):
+        """
+        Returns the remaining lease time in seconds.
+        """
+        if self.lease_start_time is None or self.lease_duration is None:
+            return 0
+
+        elapsed_time = time.time() - self.lease_start_time
+        remaining_time = self.lease_duration - elapsed_time
+
+        return max(0, int(remaining_time))
+
+    def update_state_from_timer(self):
+        """
+        Automatically updates the client state based
+        on T1, T2, and lease expiry.
+        """
+        if self.lease_start_time is None:
+            return self.state
+
+        current_time = time.time()
+
+        if current_time >= self.lease_start_time + self.lease_duration:
+            self.lease_expired()
+
+        elif current_time >= self.t2_time:
+            self.state = DHCPClientState.REBINDING
+
+        elif current_time >= self.t1_time:
+            self.state = DHCPClientState.RENEWING
+
+        return self.state
