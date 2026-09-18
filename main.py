@@ -147,38 +147,44 @@ def request_ip():
         log_message("[ERROR] No available IP addresses")
         return
 
-    #DHCP Offer
-    log_message(f"[OFFER] Server offers IP: {offered_ip}")
-    log_message(f"         Server IP: {server.server_ip}")
+    root.after(dora_delay, lambda: show_dhcp_offer(client_id, mac_address,offered_ip))
 
-    #DHCP Request
+def show_dhcp_offer(client_id, mac_address, offered_ip):
+    # DHCP OFFER
+    log_message(f"[OFFER] Server offers IP: {offered_ip}")
+    log_message(f"        Server IP: {server.server_ip}")
+
+    root.after(
+        dora_delay,
+        lambda: show_dhcp_request(client_id, mac_address, offered_ip)
+    )
+
+
+def show_dhcp_request(client_id, mac_address, offered_ip):
+    # DHCP REQUEST
     log_message(f"[REQUEST] Client {client_id} requests {offered_ip}")
     log_message(f"          Client MAC: {mac_address}")
 
+    root.after(
+        dora_delay,
+        lambda: show_dhcp_ack(client_id, mac_address, offered_ip)
+    )
+
+
+def show_dhcp_ack(client_id, mac_address, offered_ip):
+    # Perform the actual IP allocation
     success = server.request(client_id, offered_ip)
 
     if success:
-
-        #Add client, IP, remaining time to GUI table
         remaining_time = server.get_remaining_time(client_id)
-    
-        #If client already exists, update its row
-        if ip_table.exists(client_id):
-            ip_table.item(client_id, values = (client_id, mac_address, offered_ip, f"{remaining_time} seconds"))
-            log_message(f"[ACK] Lease renewed for {client_id}")
-            log_message(f"      IP Address: {offered_ip}")
-            log_message(f"      Lease Duration: {server.lease_duration} seconds")
-        else:
-            log_message(f"[ACK] IP {offered_ip} assigned to {client_id}")
-            log_message(f"      Lease Duration: {server.lease_duration} seconds")
-            
-            ip_table.insert("", "end", iid = client_id, values=(client_id, mac_address, offered_ip, f"{remaining_time} seconds"))
 
-        #Clear the input box
+        log_message(f"[ACK] IP {offered_ip} assigned to {client_id}")
+        log_message(f"      Lease Duration: {server.lease_duration} seconds")
+
+        ip_table.insert("", "end", iid=client_id, values=(client_id, mac_address, offered_ip, f"{remaining_time} seconds"))
         client_entry.delete(0, tk.END)
-
     else:
-        log_message("[NAK] IP address is not available")
+        log_message("[NAK] IP address is not available")    
 
 def show_client_configuration():
     selected_item = ip_table.selection()
@@ -275,6 +281,9 @@ def update_leases():
 
 #Create DHCP Server
 server = DHCPServer()
+
+#1 second delay
+dora_delay = 2000
 
 #Main Application Window
 root = tk.Tk()
