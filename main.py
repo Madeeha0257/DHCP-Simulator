@@ -315,10 +315,14 @@ configuration_button.grid(row = 0, column = 2, padx = 5)
 table_label = tk.Label(root, text = "Allocated IP Addresses", font = ("Arial", 14, "bold"))
 table_label.pack(pady=(20, 5))
 
+#Create frame for allocated IP table
+table_frame = tk.Frame(root)
+table_frame.pack(pady = 10)
+
 #Create the table
 columns = ("Client ID", "MAC Address", "Assigned IP", "Lease Remaining")
 
-ip_table = ttk.Treeview(root, columns = columns, show = "headings", height = 5)
+ip_table = ttk.Treeview(table_frame, columns = columns, show = "headings", height = 5)
 
 #Configure column headings
 ip_table.heading("Client ID", text="Client ID")
@@ -332,6 +336,16 @@ ip_table.column("MAC Address", width = 150)
 ip_table.column("Assigned IP", width = 130)
 ip_table.column("Lease Remaining", width = 120)
 ip_table.pack(pady=10)
+
+#Place the table inside the frame
+ip_table.grid(row = 0, column = 0)
+
+#Create vertical scrollbar
+table_scrollbar = tk.Scrollbar(table_frame, orient = "vertical", command = ip_table.yview)
+table_scrollbar.grid(row = 0, column = 1, sticky = "ns")
+
+#Connect table to scrollbar
+ip_table.config(yscrollcommand=table_scrollbar.set)
 
 #Message log handling
 log_label = tk.Label(root, text="DHCP Message Log", font=("Arial", 14, "bold"))
