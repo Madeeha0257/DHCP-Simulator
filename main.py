@@ -130,6 +130,10 @@ def request_ip():
         log_message("[ERROR] Please enter a Client ID.")
         return
 
+    if ip_table.exists(client_id):
+        log_message(f"[ERROR] Client {client_id} already has an IP address")
+        return
+
     #Get or generate client's MAC Address
     mac_address = server.get_mac_address(client_id)
 
@@ -309,7 +313,7 @@ request_button = tk.Button(button_frame, text = "Request IP Address", font = ("A
 request_button.grid(row = 0, column = 0, padx = 5)
 
 #Release IP button
-release_button = tk.Button(button_frame, text = "Release Selected IP", fon= ("Arial", 12), width = 20, command = release_selected_ip)
+release_button = tk.Button(button_frame, text = "Release Selected IP", font= ("Arial", 12), width = 20, command = release_selected_ip)
 release_button.grid(row = 0, column = 1, padx = 5)
 
 #View configuration button
@@ -340,10 +344,9 @@ ip_table.column("Client ID", width = 100)
 ip_table.column("MAC Address", width = 150)
 ip_table.column("Assigned IP", width = 130)
 ip_table.column("Lease Remaining", width = 120)
-ip_table.pack(pady=10)
 
 #Place the table inside the frame
-ip_table.grid(row = 0, column = 0)
+ip_table.grid(row = 0, column = 0, padx = 5, pady = 10)
 
 #Create vertical scrollbar
 table_scrollbar = tk.Scrollbar(table_frame, orient = "vertical", command = ip_table.yview)
