@@ -200,9 +200,10 @@ def show_client_configuration():
     configuration_window = tk.Toplevel(root)
     configuration_window.title("Client Configuration")
     configuration_window.geometry("500x400")
+    configuration_window.configure(bg=BG_COLOR)
 
     #Window heading
-    configuration_label = tk.Label(configuration_window, text = "Client Configuration", font = ("Arial", 16, "bold"))
+    configuration_label = tk.Label(configuration_window, text = "Client Configuration", font = ("Arial", 16, "bold"), bg = BG_COLOR, fg = BLUE_COLOR)
 
     configuration_text = (
         "Client Configuration\n"
@@ -217,7 +218,7 @@ def show_client_configuration():
     )
 
     #Text box inside new window
-    configuration_log = tk.Text(configuration_window, height = 12, width = 55, state = "normal")
+    configuration_log = tk.Text(configuration_window, height = 12, width = 55, state = "normal", bg = LOG_COLOR, fg = "#E2E8F0", relief="flat")
     configuration_log.pack(padx = 20, pady = 10)
 
     configuration_log.insert(tk.END, configuration_text)
@@ -225,7 +226,7 @@ def show_client_configuration():
     configuration_log.config(state = "disabled")
 
     #Close button
-    close_button = tk.Button(configuration_window, text = "Close", command = configuration_window.destroy)
+    close_button = tk.Button(configuration_window, text = "Close", font = ("Arial", 10, "bold"), bg = RED_COLOR, fg = "white", activebackground="#B91C1C", activeforeground="white", relief="flat", cursor = "hand2", command = configuration_window.destroy)
     close_button.pack(pady=10)
 
 def release_selected_ip():
@@ -287,46 +288,68 @@ root.geometry("800x800")
 #Preventing small resizing
 root.minsize(600,650)
 
+#Colour theme
+BG_COLOR = "#0F172A"          # Dark navy
+CARD_COLOR = "#1E293B"        # Slate
+TEXT_COLOR = "#E2E8F0"        # Light text
+SUBTEXT_COLOR = "#94A3B8"     # Grey text
+BLUE_COLOR = "#2563EB"        # Blue
+GREEN_COLOR = "#16A34A"       # Green
+RED_COLOR = "#DC2626"         # Red
+PURPLE_COLOR = "#7C3AED"      # Purple
+INPUT_COLOR = "#334155"       # Input background
+LOG_COLOR = "#020617"         # Almost black
+
+root.configure(bg = BG_COLOR)
 #Creating a heading
-title_label = tk.Label(root, text = "DHCP Simulator", font = ("Arial", 20, "bold"))
-title_label.pack(pady=20)
+title_label = tk.Label(root, text = "DHCP Simulator", font = ("Arial", 20, "bold"), bg = BG_COLOR, fg = BLUE_COLOR)
+title_label.pack(pady=(25, 5))
 
 #Creating a subtitle
-subtitle_label = tk.Label(root, text = "Dynamic Host Configuration Protocol Simulation", font = ("Arial", 11))
-
+subtitle_label = tk.Label(root, text = "Dynamic Host Configuration Protocol Simulation", font = ("Arial", 11), bg = BG_COLOR, fg = SUBTEXT_COLOR)
 subtitle_label.pack()
 
 #Client ID label
-client_label = tk.Label(root, text = "Enter Client ID:", font = ("Arial", 12))
+client_label = tk.Label(root, text = "Enter Client ID:", font = ("Arial", 12), bg = BG_COLOR, fg = TEXT_COLOR)
 client_label.pack(pady=(30,5))
 
 #Client ID Input box
-client_entry = tk.Entry(root, font = ("Arial"), width=30)
+client_entry = tk.Entry(root, font = ("Arial"), width=30, bg = INPUT_COLOR, fg = "white", insertbackground = "white", relief = "flat", justify = "center")
 client_entry.pack(pady=5)
 
 #Button frame
-button_frame = tk.Frame(root)
+button_frame = tk.Frame(root, bg=BG_COLOR)
 button_frame.pack(pady=15)
 
 #Request IP button
-request_button = tk.Button(button_frame, text = "Request IP Address", font = ("Arial", 12), width = 20, command = request_ip)
+request_button = tk.Button(button_frame, text = "Request IP Address", font = ("Arial", 12), width = 20, bg = GREEN_COLOR, fg = "white", activebackground="#15803D", activeforeground="white", relief = "flat", cursor = "hand2", command = request_ip)
 request_button.grid(row = 0, column = 0, padx = 5)
 
 #Release IP button
-release_button = tk.Button(button_frame, text = "Release Selected IP", font= ("Arial", 12), width = 20, command = release_selected_ip)
+release_button = tk.Button(button_frame, text = "Release Selected IP", font= ("Arial", 12), width = 20, bg = RED_COLOR, fg = "white", activebackground="#B91C1C", activeforeground="white", relief="flat", cursor="hand2", command = release_selected_ip)
 release_button.grid(row = 0, column = 1, padx = 5)
 
 #View configuration button
-configuration_button = tk.Button(button_frame, text = "View Client Configuration", width = 23, command = show_client_configuration)
+configuration_button = tk.Button(button_frame, text = "View Client Configuration", width = 23, bg = PURPLE_COLOR, fg = "white", activebackground="#6D28D9", activeforeground="white", relief = "flat", cursor = "hand2", command = show_client_configuration)
 configuration_button.grid(row = 0, column = 2, padx = 5)
 
 #Allocated IP table heading
-table_label = tk.Label(root, text = "Allocated IP Addresses", font = ("Arial", 14, "bold"))
+table_label = tk.Label(root, text = "Allocated IP Addresses", font = ("Arial", 14, "bold"), bg=BG_COLOR, fg = "#60A5FA")
 table_label.pack(pady=(20, 5))
 
 #Create frame for allocated IP table
-table_frame = tk.Frame(root)
+table_frame = tk.Frame(root, bg = CARD_COLOR, padx = 10, pady = 10)
 table_frame.pack(pady = 10)
+
+#Configure ttk styles
+style = ttk.Style()
+style.theme_use("clam")
+
+style.configure("Treeview", background="#E2E8F0", foreground="#0F172A", fieldbackground="#E2E8F0", rowheight=32, font=("Arial", 10))
+
+style.configure("Treeview.Heading", background=BLUE_COLOR, foreground="white", font=("Arial", 10, "bold"), relief="flat")
+
+style.map("Treeview", background=[("selected", "#93C5FD")], foreground=[("selected", "#0F172A")])
 
 #Create the table
 columns = ("Client ID", "MAC Address", "Assigned IP", "Lease Remaining")
@@ -356,15 +379,15 @@ table_scrollbar.grid(row = 0, column = 1, sticky = "ns")
 ip_table.config(yscrollcommand=table_scrollbar.set)
 
 #Message log handling
-log_label = tk.Label(root, text="DHCP Message Log", font=("Arial", 14, "bold"))
+log_label = tk.Label(root, text="DHCP Message Log", font=("Arial", 14, "bold"), bg = BG_COLOR, fg = "#60A5FA")
 log_label.pack(pady=(20, 5))
 
 #Message log frame
-message_log_frame = tk.Frame(root)
+message_log_frame = tk.Frame(root, bg = CARD_COLOR, padx = 10, pady = 10)
 message_log_frame.pack(pady = 10)
 
 #Message log text box
-message_log = tk.Text(message_log_frame, height = 8, width = 70, state = "disabled", wrap = "word")
+message_log = tk.Text(message_log_frame, height = 8, width = 70, state = "disabled", wrap = "word", bg = LOG_COLOR, fg = "#4ADE80", insertbackground="white", relief = "flat")
 message_log.grid(row = 0, column = 0)
 
 #Message log scrollbar
@@ -374,7 +397,7 @@ message_scrollbar.grid(row = 0, column = 1, sticky = "ns")
 #Connect text box to scrollbar
 message_log.config(yscrollcommand = message_scrollbar.set)
 
-clear_log_button = tk.Button(root, text = "Clear Message Log", command = clear_message_log)
+clear_log_button = tk.Button(root, text = "Clear Message Log", font = ("Arial", 10, "bold"), bg = "#475569", fg = "white", activebackground="#64748B", activeforeground="white", relief="flat", cursor = "hand2", command = clear_message_log)
 clear_log_button.pack(pady=(0, 15))
 
 #Start automatic lease checking
