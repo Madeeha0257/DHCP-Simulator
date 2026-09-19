@@ -95,13 +95,14 @@ class DHCPTopologyUI:
 
         self.packet = None
 
-
         self.positions = {
-            "client": (130, 210),
-            "switch": (360, 210),
-            "relay": (600, 210),
-            "server": (850, 210)
+            "switch": (430, 210),
+            "relay": (650, 210),
+            "server": (870, 210)
         }
+
+        self.client_positions = {}
+
         self.create_widgets()
 
         # ==========================================
@@ -117,6 +118,9 @@ class DHCPTopologyUI:
         client = DHCPClient(client_id)
 
         self.clients[client_id] = client
+
+        # Redraw topology so the new client appears
+        self.draw_topology()
 
         self.add_log(
             f"[CLIENT] {client_id} added to network."
@@ -687,12 +691,50 @@ class DHCPTopologyUI:
         )
 
     # ==========================================
+    # Calculate Client Positions
+    # ==========================================
+
+    def calculate_client_positions(self):
+
+        self.client_positions = {}
+
+        client_ids = list(self.clients.keys())
+
+        if not client_ids:
+            return
+
+        # Maximum number of clients per column
+        max_per_column = 4
+
+        start_x = 100
+        start_y = 120
+        vertical_spacing = 80
+
+        for index, client_id in enumerate(client_ids):
+
+            column = index // max_per_column
+            row = index % max_per_column
+
+            x = start_x + (column * 120)
+            y = start_y + (row * vertical_spacing)
+
+            self.client_positions[client_id] = (
+                x,
+                y
+            )
+
+    # ==========================================
     # Topology
     # ==========================================
 
     def draw_topology(self):
 
         self.canvas.delete("all")
+
+        self.device_shapes = {}
+
+        # Calculate client positions
+        self.calculate_client_positions()
 
         positions = self.positions
 
@@ -701,7 +743,7 @@ class DHCPTopologyUI:
         # ==========================================
 
         self.canvas.create_text(
-            260,
+            270,
             45,
             text="CLIENT NETWORK",
             font=("Segoe UI", 10, "bold"),
@@ -717,7 +759,7 @@ class DHCPTopologyUI:
         )
 
         self.canvas.create_text(
-            260,
+            270,
             68,
             text="192.168.2.0/24",
             font=("Consolas", 9),
@@ -733,14 +775,14 @@ class DHCPTopologyUI:
         )
 
         # ==========================================
-        # Network separator
+        # Subnet boundary
         # ==========================================
 
         self.canvas.create_line(
             770,
             90,
             770,
-            330,
+            430,
             fill="#cbd5e1",
             dash=(5, 5),
             width=2
@@ -748,42 +790,78 @@ class DHCPTopologyUI:
 
         self.canvas.create_text(
             770,
-            105,
-            text="SUBNET BOUNDARY",
+            250,
+            text="SUBNET\nBOUNDARY",
             font=("Segoe UI", 8),
-            fill="#94a3b8",
-            angle=90
+            fill="#94a3b8"
         )
 
         # ==========================================
-        # Connections
+        # Client → Switch connections
         # ==========================================
 
-        connections = [
-            ("client", "switch"),
-            ("switch", "relay"),
-            ("relay", "server")
-        ]
+        switch_x, switch_y = positions["switch"]
 
-        for source, destination in connections:
-
-            x1, y1 = positions[source]
-            x2, y2 = positions[destination]
+        for client_id, (client_x, client_y) in self.client_positions.items():
 
             self.canvas.create_line(
-                x1 + 65,
-                y1,
-                x2 - 65,
-                y2,
+                client_x + 65,
+                client_y,
+                switch_x - 65,
+                switch_y,
                 fill="#94a3b8",
-                width=3
+                width=2
             )
 
         # ==========================================
-        # Devices
+        # Switch → Relay
         # ==========================================
 
-        for device_id, position in positions.items():
+        self.canvas.create_line(
+            switch_x + 65,
+            switch_y,
+            positions["relay"][0] - 65,
+            positions["relay"][1],
+            fill="#94a3b8",
+            width=3
+        )
+
+        # ==========================================
+        # Relay → Server
+        # ==========================================
+
+        self.canvas.create_line(
+            positions["relay"][0] + 65,
+            positions["relay"][1],
+            positions["server"][0] - 65,
+            positions["server"][1],
+            fill="#94a3b8",
+            width=3
+        )
+
+        # ==========================================
+        # Draw clients
+        # ==========================================
+
+        for client_id, (x, y) in self.client_positions.items():
+
+            self.draw_client_device(
+                client_id,
+                x,
+                y
+            )
+
+        # ==========================================
+        # Draw fixed devices
+        # ==========================================
+
+        for device_id in [
+            "switch",
+            "relay",
+            "server"
+        ]:
+
+            position = positions[device_id]
 
             device = self.devices[device_id]
 
@@ -794,6 +872,90 @@ class DHCPTopologyUI:
                 device["name"],
                 device["type"]
             )
+
+    # ==========================================
+    # Draw Client
+    # ==========================================
+
+    def draw_client_device(
+        self,
+        client_id,
+        x,
+        y
+    ):
+
+        width = 110
+        height = 65
+
+        rectangle = self.canvas.create_rectangle(
+            x - width // 2,
+            y - height // 2,
+            x + width // 2,
+            y + height // 2,
+            outline="#cbd5e1",
+            width=2,
+            fill="white"
+        )
+
+        # Blue accent
+
+        self.canvas.create_rectangle(
+            x - width // 2,
+            y - height // 2,
+            x - width // 2 + 6,
+            y + height // 2,
+            outline="#2563eb",
+            fill="#2563eb"
+        )
+
+        # Client icon
+
+        self.canvas.create_text(
+            x,
+            y - 16,
+            text="▣",
+            font=("Segoe UI", 16, "bold"),
+            fill="#2563eb"
+        )
+
+        # Client name
+
+        self.canvas.create_text(
+            x,
+            y + 5,
+            text=client_id,
+            font=("Segoe UI", 9, "bold"),
+            fill="#1f2937"
+        )
+
+        # State
+
+        client = self.clients[client_id]
+
+        state = client.state.value
+
+        self.canvas.create_text(
+            x,
+            y + 22,
+            text=state,
+            font=("Segoe UI", 7),
+            fill="#6b7280"
+        )
+
+        # Store shape
+
+        self.device_shapes[
+            client_id
+        ] = rectangle
+
+        # Click
+
+        self.canvas.tag_bind(
+            rectangle,
+            "<Button-1>",
+            lambda event, c=client_id:
+            self.show_client_info(c)
+        )
 
     # ==========================================
     # Device
@@ -980,6 +1142,62 @@ class DHCPTopologyUI:
 
         self.add_log(
             f"[DEVICE] {device['name']} selected."
+        )
+
+        # ==========================================
+    # Client Information
+    # ==========================================
+
+    def show_client_info(self, client_id):
+
+        self.selected_device = client_id
+
+        client = self.clients[client_id]
+
+        if client.ip_address:
+            ip = client.ip_address
+        else:
+            ip = "0.0.0.0"
+
+        if client.mac_address:
+            mac = client.mac_address
+        else:
+            mac = "Not assigned"
+
+        remaining = client.get_remaining_lease_time()
+
+        if remaining is not None:
+            lease = f"{remaining:.1f} seconds"
+        else:
+            lease = "No active lease"
+
+        info = (
+            f"{client_id}\n"
+            f"Type: DHCP Client\n"
+            f"State: {client.state.value}\n"
+            f"IP Address: {ip}\n"
+            f"MAC Address: {mac}\n"
+            f"Network: 192.168.2.0/24\n"
+            f"Lease Remaining: {lease}"
+        )
+
+        self.info_label.config(
+            text=info
+        )
+
+        self.state_label.config(
+            text=client.state.value
+        )
+
+        self.lease_label.config(
+            text=(
+                f"IP Address: {ip}\n"
+                f"Remaining: {lease}"
+            )
+        )
+
+        self.add_log(
+            f"[DEVICE] {client_id} selected."
         )
 
     def update_client_info(self):
