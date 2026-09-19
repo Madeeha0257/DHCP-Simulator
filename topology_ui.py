@@ -33,7 +33,19 @@ class DHCPTopologyUI:
             lease_duration=60
         )
 
-        self.client = DHCPClient("Client A")
+        # ==========================================
+        # DHCP Clients
+        # ==========================================
+
+        self.clients = {}
+
+        client_a = DHCPClient("Client A")
+
+        self.clients["Client A"] = client_a
+
+        # Keep this temporarily for compatibility
+        # with the existing DHCP flow.
+        self.client = client_a
 
         self.relay = DHCPRelayAgent(
             relay_id="R1",
@@ -92,6 +104,26 @@ class DHCPTopologyUI:
         }
         self.create_widgets()
 
+        # ==========================================
+    # Client Management
+    # ==========================================
+
+    def add_client(self):
+
+        client_number = len(self.clients) + 1
+
+        client_id = f"Client {chr(64 + client_number)}"
+
+        client = DHCPClient(client_id)
+
+        self.clients[client_id] = client
+
+        self.add_log(
+            f"[CLIENT] {client_id} added to network."
+        )
+
+        return client
+    
     # ==========================================
     # GUI
     # ==========================================
@@ -393,18 +425,22 @@ class DHCPTopologyUI:
 
         # Future buttons
 
-        tk.Button(
+        self.add_client_button = tk.Button(
             controls,
             text="+ Client",
+            command=self.add_client,
             font=("Segoe UI", 10),
             bg="white",
             fg="#374151",
+            activebackground="#e5e7eb",
             relief="solid",
             bd=1,
             padx=14,
             pady=7,
-            state="disabled"
-        ).pack(
+            cursor="hand2"
+        )
+
+        self.add_client_button.pack(
             side="right",
             padx=4
         )
