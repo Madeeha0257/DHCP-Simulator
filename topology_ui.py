@@ -4,6 +4,7 @@ from tkinter import ttk
 from dhcp_core import (
     DHCPServer,
     DHCPClient,
+    DHCPClientState,
     DHCPRelayAgent,
     DHCPMessage,
     DHCPMessageType
@@ -90,6 +91,8 @@ class DHCPTopologyUI:
         }
 
         self.device_shapes = {}
+
+        self.client_state_labels = {}
 
         self.selected_device = None
 
@@ -733,6 +736,8 @@ class DHCPTopologyUI:
 
         self.device_shapes = {}
 
+        self.client_state_labels = {}
+
         # Calculate client positions
         self.calculate_client_positions()
 
@@ -934,13 +939,15 @@ class DHCPTopologyUI:
 
         state = client.state.value
 
-        self.canvas.create_text(
+        state_text = self.canvas.create_text(
             x,
             y + 22,
             text=state,
             font=("Segoe UI", 7),
             fill="#6b7280"
         )
+
+        self.client_state_labels[client_id] = state_text
 
         # Store shape
 
@@ -956,6 +963,27 @@ class DHCPTopologyUI:
             lambda event, c=client_id:
             self.show_client_info(c)
         )
+
+    def refresh_client_canvas_state(self, client_id):
+        """Keeps one client's state text on the canvas up to date."""
+
+        client = self.clients.get(client_id)
+
+        state_text = self.client_state_labels.get(client_id)
+
+        if client is None or state_text is None:
+            return
+
+        self.canvas.itemconfig(
+            state_text,
+            text=client.state.value
+        )
+
+    def refresh_all_client_canvas_states(self):
+        """Keeps every client box on the canvas in sync."""
+
+        for client_id in self.clients:
+            self.refresh_client_canvas_state(client_id)
 
     # ==========================================
     # Device
@@ -1092,49 +1120,26 @@ class DHCPTopologyUI:
 
         self.selected_device = device_id
 
+        # Client-specific information.
+        # The sidebar "client" row represents the primary client,
+        # while the canvas passes a real client id.
+        if device_id == "client":
+            self.show_client_info(self.client.client_id)
+            return
+
+        if device_id in self.clients:
+            self.show_client_info(device_id)
+            return
+
         device = self.devices[device_id]
 
-        # Client-specific information
-        if device_id == "client":
-
-            state = self.client.state.value
-
-            if self.client.ip_address:
-                ip = self.client.ip_address
-            else:
-                ip = "0.0.0.0"
-
-            if self.client.mac_address:
-                mac = self.client.mac_address
-            else:
-                mac = "Not assigned"
-
-            remaining = self.client.get_remaining_lease_time()
-
-            if remaining is not None:
-                lease = f"{remaining:.1f} seconds"
-            else:
-                lease = "No active lease"
-
-            info = (
-                f"CLIENT A\n"
-                f"Type: DHCP Client\n"
-                f"State: {state}\n"
-                f"IP Address: {ip}\n"
-                f"MAC Address: {mac}\n"
-                f"Network: {device['network']}\n"
-                f"Lease Remaining: {lease}"
-            )
-
-        else:
-
-            info = (
-                f"{device['name']}\n"
-                f"Type: {device['type']}\n"
-                f"IP Address: {device['ip']}\n"
-                f"MAC Address: {device['mac']}\n"
-                f"Network: {device['network']}"
-            )
+        info = (
+            f"{device['name']}\n"
+            f"Type: {device['type']}\n"
+            f"IP Address: {device['ip']}\n"
+            f"MAC Address: {device['mac']}\n"
+            f"Network: {device['network']}"
+        )
 
         self.info_label.config(
             text=info
@@ -1154,10 +1159,32 @@ class DHCPTopologyUI:
 
         client = self.clients[client_id]
 
-        if client.ip_address:
-            ip = client.ip_address
-        else:
-            ip = "0.0.0.0"
+        self.info_label.config(
+            text=self.build_client_info(client_id, client)
+        )
+
+        self.refresh_client_panels(client)
+
+        self.add_log(
+            f"[DEVICE] {client_id} selected."
+        )
+
+    def get_selected_client(self):
+        """
+        Returns the DHCPClient the information panels should describe,
+        or None when no client is selected.
+        """
+
+        selected = getattr(self, "selected_device", None)
+
+        if selected == "client":
+            # Sidebar entry -> primary client
+            return self.client
+
+        return self.clients.get(selected)
+
+    def build_client_info(self, client_id, client):
+        """Builds the Device Information text for one client."""
 
         if client.mac_address:
             mac = client.mac_address
@@ -1171,22 +1198,49 @@ class DHCPTopologyUI:
         else:
             lease = "No active lease"
 
-        info = (
+        return (
             f"{client_id}\n"
             f"Type: DHCP Client\n"
             f"State: {client.state.value}\n"
-            f"IP Address: {ip}\n"
+            f"IP Address: {client.ip_address or '0.0.0.0'}\n"
             f"MAC Address: {mac}\n"
-            f"Network: 192.168.2.0/24\n"
+            f"Network: {self.devices['client']['network']}\n"
             f"Lease Remaining: {lease}"
         )
 
-        self.info_label.config(
-            text=info
-        )
+    def refresh_client_panels(self, client):
+        """
+        Shows the given client's live state and lease in the
+        DHCP State and Lease panels.
+        """
+
+        if client.ip_address:
+            ip = client.ip_address
+        else:
+            ip = "0.0.0.0"
+
+        remaining = client.get_remaining_lease_time()
+
+        if remaining is not None:
+            lease = f"{remaining:.1f} seconds"
+        else:
+            lease = "No active lease"
+
+        state_colors = {
+            "INIT": "#6b7280",
+            "SELECTING": "#2563eb",
+            "REQUESTING": "#f59e0b",
+            "BOUND": "#16a34a",
+            "RENEWING": "#ea580c",
+            "REBINDING": "#dc2626"
+        }
 
         self.state_label.config(
-            text=client.state.value
+            text=client.state.value,
+            fg=state_colors.get(
+                client.state.value,
+                "#6b7280"
+            )
         )
 
         self.lease_label.config(
@@ -1196,27 +1250,36 @@ class DHCPTopologyUI:
             )
         )
 
-        self.add_log(
-            f"[DEVICE] {client_id} selected."
+    def sync_client_ui(self, client_id):
+        """
+        Refreshes one client's canvas state and, when that client is the
+        selected device, the Device Information / DHCP State / Lease panels.
+        """
+
+        self.refresh_client_canvas_state(client_id)
+
+        client = self.clients.get(client_id)
+
+        if client is None:
+            return
+
+        if self.get_selected_client() is not client:
+            return
+
+        self.info_label.config(
+            text=self.build_client_info(client_id, client)
         )
 
+        self.refresh_client_panels(client)
+
     def update_client_info(self):
-        """Continuously update Client A information."""
+        """Continuously update the DHCP information panels."""
 
         if not hasattr(self, "info_label"):
             return
 
-        if self.client.ip_address:
-            ip = self.client.ip_address
-        else:
-            ip = "0.0.0.0"
-
-        if self.client.mac_address:
-            mac = self.client.mac_address
-        else:
-            mac = "Not assigned"
-
         # Update DHCP state based on lease timer
+
         old_state = self.client.state
 
         self.client.update_state_from_timer()
@@ -1233,63 +1296,31 @@ class DHCPTopologyUI:
             )
 
         # Log state transitions
+
         if old_state != new_state:
             self.add_log(
-                f"[STATE CHANGE] Client A: "
+                f"[STATE CHANGE] {self.client.client_id}: "
                 f"{old_state.value} → {new_state.value}"
             )
 
-        remaining = self.client.get_remaining_lease_time()
+        # Keep every client box on the canvas in sync
 
-        if remaining is not None:
-            lease = f"{remaining:.1f} seconds"
-        else:
-            lease = "No active lease"
+        self.refresh_all_client_canvas_states()
 
-        info = (
-            f"CLIENT A\n"
-            f"Type: DHCP Client\n"
-            f"State: {new_state.value}\n"
-            f"IP Address: {ip}\n"
-            f"MAC Address: {mac}\n"
-            f"Network: {self.devices['client']['network']}\n"
-            f"Lease Remaining: {lease}"
-        )
+        # The panels describe whichever client is currently selected
 
-        # ==========================================
-        # Update dashboard state
-        # ==========================================
+        selected_client = self.get_selected_client()
 
-        self.state_label.config(
-            text=new_state.value
-        )
+        if selected_client is not None:
 
-        state_colors = {
-            "INIT": "#6b7280",
-            "SELECTING": "#2563eb",
-            "REQUESTING": "#f59e0b",
-            "BOUND": "#16a34a",
-            "RENEWING": "#ea580c",
-            "REBINDING": "#dc2626"
-        }
-
-        self.state_label.config(
-            fg=state_colors.get(
-                new_state.value,
-                "#6b7280"
+            self.info_label.config(
+                text=self.build_client_info(
+                    selected_client.client_id,
+                    selected_client
+                )
             )
-        )
 
-        self.lease_label.config(
-            text=(
-                f"IP Address: {ip}\n"
-                f"Remaining: {lease}"
-            )
-        )
-
-        # Only update the panel if Client A is currently selected
-        if getattr(self, "selected_device", None) == "client":
-            self.info_label.config(text=info)
+            self.refresh_client_panels(selected_client)
 
         # Run again after 1 second
         self.root.after(1000, self.update_client_info)
@@ -1393,7 +1424,32 @@ class DHCPTopologyUI:
     # Start DHCP
     # ==========================================
 
-    def start_dhcp(self):
+    def start_dhcp(self, client_id=None):
+        """
+        Starts the DORA exchange for one specific client.
+
+        The control button passes no client id, so the client that is
+        currently selected in the GUI is used instead.
+        """
+
+        if client_id is None:
+
+            selected = getattr(self, "selected_device", None)
+
+            if selected in self.clients:
+                client_id = selected
+            else:
+                # Sidebar "client" entry, or nothing selected yet:
+                # fall back to the first client in the network.
+                client_id = next(iter(self.clients), None)
+
+        if client_id is None or client_id not in self.clients:
+
+            self.add_log(
+                f"[ERROR] Client {client_id} not found."
+            )
+
+            return
 
         self.start_button.config(state="disabled")
 
@@ -1402,16 +1458,20 @@ class DHCPTopologyUI:
             "========== DHCP PROCESS STARTED =========="
         )
 
+        self.add_log(
+            f"[INFO] Starting DORA for {client_id}."
+        )
+
         self.root.after(
             500,
-            self.send_discover
+            lambda: self.send_discover(client_id)
         )
 
     # ==========================================
     # DHCPDISCOVER
     # ==========================================
 
-    def send_discover(self, client_id="Client A"):
+    def send_discover(self, client_id):
 
         client = self.clients.get(client_id)
 
@@ -1421,7 +1481,9 @@ class DHCPTopologyUI:
             )
             return
 
-        client.state = self.client.state.INIT
+        # Every DHCPDISCOVER starts a fresh offer cycle for this client
+        client.state = DHCPClientState.INIT
+        client.offers.clear()
 
         if client.mac_address is None:
             mac = self.server.get_mac_address(
@@ -1430,7 +1492,11 @@ class DHCPTopologyUI:
 
             client.assign_mac(mac)
 
-        self.devices["client"]["mac"] = client.mac_address
+        # self.devices["client"] is the legacy single-client GUI record
+        # that the sidebar and reset() still rely on, so it must keep
+        # describing the primary client only.
+        if client is self.client:
+            self.devices["client"]["mac"] = client.mac_address
 
         discover = DHCPMessage(
             message_type=DHCPMessageType.DISCOVER,
@@ -1447,8 +1513,6 @@ class DHCPTopologyUI:
         self.add_log(
             f"    MAC: {client.mac_address}"
         )
-
-        self.highlight_device("client")
 
         client_position = self.client_positions.get(
             client_id
@@ -1518,40 +1582,61 @@ class DHCPTopologyUI:
     # DHCPOFFER
     # =========================================
 
-    def receive_ack(self, ack):
+    def receive_offer(self, offer):
+        """
+        Records the DHCPOFFER on the client it belongs to and
+        animates it back towards that client.
+        """
 
-        self.highlight_device("server")
+        client = self.clients.get(offer.client_id)
 
-        if ack.message_type == DHCPMessageType.ACK:
-
-            self.add_log(
-                f"[DHCPACK] S1 → Relay R1 → "
-                f"{ack.client_id}"
-            )
-
-            self.add_log(
-                f"    Assigned IP: {ack.offered_ip}"
-            )
-
-            self.animate_packet(
-                self.positions["server"],
-                self.positions["relay"],
-                "DHCPACK",
-                callback=lambda: self.animate_ack_to_switch(
-                    ack
-                )
-            )
-
-        else:
+        if client is None:
 
             self.add_log(
-                f"[DHCPNAK] "
-                f"{ack.client_id} request rejected."
+                f"[ERROR] Client {offer.client_id} not found."
             )
 
             self.start_button.config(
                 state="normal"
             )
+
+            return
+
+        if offer.message_type != DHCPMessageType.OFFER:
+
+            self.add_log(
+                f"[DHCPNAK] "
+                f"{offer.client_id} request rejected: "
+                f"{offer.description}"
+            )
+
+            self.start_button.config(
+                state="normal"
+            )
+
+            return
+
+        # Store the offer on this client only -> SELECTING
+        client.receive_offer(offer)
+
+        self.highlight_device("server")
+
+        self.add_log(
+            f"[DHCPOFFER] S1 → Relay R1 → {offer.client_id}"
+        )
+
+        self.add_log(
+            f"    Offered IP: {offer.offered_ip}"
+        )
+
+        self.animate_packet(
+            self.positions["server"],
+            self.positions["relay"],
+            "DHCPOFFER",
+            callback=lambda: self.animate_offer_to_switch(
+                offer
+            )
+        )
 
     def animate_offer_to_switch(self, offer):
 
@@ -1598,7 +1683,7 @@ class DHCPTopologyUI:
     # DHCPREQUEST
     # ==========================================
 
-    def send_request(self, client_id="Client A"):
+    def send_request(self, client_id):
 
         client = self.clients.get(client_id)
 
@@ -1812,7 +1897,7 @@ class DHCPTopologyUI:
         if ack.message_type == DHCPMessageType.ACK:
 
             self.add_log(
-                "[DHCPACK] S1 → Relay R1 → Client A"
+                f"[DHCPACK] S1 → Relay R1 → {ack.client_id}"
             )
 
             self.add_log(
@@ -1831,7 +1916,8 @@ class DHCPTopologyUI:
         else:
 
             self.add_log(
-                "[DHCPNAK] Server rejected request."
+                f"[DHCPNAK] "
+                f"{ack.client_id} request rejected by server."
             )
 
             self.start_button.config(
@@ -1933,20 +2019,34 @@ class DHCPTopologyUI:
     # Finish
     # ==========================================
 
-    def finish_dhcp(self):
+    def finish_dhcp(self, client_id):
 
-        self.highlight_device("client")
+        client = self.clients.get(client_id)
+
+        if client is None:
+
+            self.add_log(
+                f"[ERROR] Client {client_id} not found."
+            )
+
+            return
+
+        self.highlight_device(client_id)
+
+        # Reflect the new state on the canvas and in the panels
+        # as soon as the exchange finishes.
+        self.sync_client_ui(client_id)
 
         self.add_log(
-            "[SUCCESS] DHCP process completed."
+            f"[SUCCESS] {client_id} completed the DORA exchange."
         )
 
         self.add_log(
-            f"[STATE] Client A → {self.client.state.value}"
+            f"[STATE] {client_id} → {client.state.value}"
         )
 
         self.add_log(
-            f"[LEASE] {self.client.ip_address}"
+            f"[LEASE] {client_id} → {client.ip_address}"
         )
 
         self.add_log(
