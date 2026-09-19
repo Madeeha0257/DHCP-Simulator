@@ -79,6 +79,16 @@ class DHCPTopologyUI:
 
         self.device_shapes = {}
 
+        self.packet = None
+
+
+        self.positions = {
+            "client": (130, 180),
+            "switch": (380, 180),
+            "relay": (650, 180),
+            "server": (930, 180)
+        }
+
         self.create_widgets()
 
     # ==========================================
@@ -106,6 +116,33 @@ class DHCPTopologyUI:
             expand=True,
             padx=20,
             pady=10
+        )
+
+        # Device Information Panel
+
+        info_frame = ttk.LabelFrame(
+            self.root,
+            text="Device Information"
+        )
+
+        info_frame.pack(
+            fill="x",
+            padx=20,
+            pady=5
+        )
+
+        self.info_label = tk.Label(
+            info_frame,
+            text="Click a device to view its information.",
+            font=("Arial", 10),
+            justify="left",
+            anchor="w"
+        )
+
+        self.info_label.pack(
+            fill="x",
+            padx=10,
+            pady=8
         )
 
         # Event log
@@ -160,6 +197,13 @@ class DHCPTopologyUI:
 
         self.draw_topology()
 
+        self.selected_device = None
+
+        self.root.after(
+            1000,
+            self.update_client_info
+        )
+
         self.add_log("[INFO] Simulator ready.")
         self.add_log(
             "[INFO] Click a device to view its information."
@@ -171,12 +215,7 @@ class DHCPTopologyUI:
 
     def draw_topology(self):
 
-        positions = {
-            "client": (130, 180),
-            "switch": (380, 180),
-            "relay": (650, 180),
-            "server": (930, 180)
-        }
+        positions = self.positions
 
         # Connections
 
@@ -267,28 +306,122 @@ class DHCPTopologyUI:
 
     def show_device_info(self, device_id):
 
+        self.selected_device = device_id
+
         device = self.devices[device_id]
+
+        # Client-specific information
+        if device_id == "client":
+
+            state = self.client.state.value
+
+            if self.client.ip_address:
+                ip = self.client.ip_address
+            else:
+                ip = "0.0.0.0"
+
+            if self.client.mac_address:
+                mac = self.client.mac_address
+            else:
+                mac = "Not assigned"
+
+            remaining = self.client.get_remaining_lease_time()
+
+            if remaining is not None:
+                lease = f"{remaining:.1f} seconds"
+            else:
+                lease = "No active lease"
+
+            info = (
+                f"CLIENT A\n"
+                f"Type: DHCP Client\n"
+                f"State: {state}\n"
+                f"IP Address: {ip}\n"
+                f"MAC Address: {mac}\n"
+                f"Network: {device['network']}\n"
+                f"Lease Remaining: {lease}"
+            )
+
+        else:
+
+            info = (
+                f"{device['name']}\n"
+                f"Type: {device['type']}\n"
+                f"IP Address: {device['ip']}\n"
+                f"MAC Address: {device['mac']}\n"
+                f"Network: {device['network']}"
+            )
+
+        self.info_label.config(
+            text=info
+        )
 
         self.add_log(
             f"[DEVICE] {device['name']} selected."
         )
 
-        self.add_log(
-            f"    Type: {device['type']}"
+    def update_client_info(self):
+        """Continuously update Client A information."""
+
+        if not hasattr(self, "info_label"):
+            return
+
+        if self.client.ip_address:
+            ip = self.client.ip_address
+        else:
+            ip = "0.0.0.0"
+
+        if self.client.mac_address:
+            mac = self.client.mac_address
+        else:
+            mac = "Not assigned"
+
+        # Update DHCP state based on lease timer
+        old_state = self.client.state
+
+        self.client.update_state_from_timer()
+
+        new_state = self.client.state
+
+        if (
+            old_state != new_state
+            and new_state.value == "RENEWING"
+        ):
+            self.root.after(
+                100,
+                self.start_renewal
+            )
+
+        # Log state transitions
+        if old_state != new_state:
+            self.add_log(
+                f"[STATE CHANGE] Client A: "
+                f"{old_state.value} → {new_state.value}"
+            )
+
+        remaining = self.client.get_remaining_lease_time()
+
+        if remaining is not None:
+            lease = f"{remaining:.1f} seconds"
+        else:
+            lease = "No active lease"
+
+        info = (
+            f"CLIENT A\n"
+            f"Type: DHCP Client\n"
+            f"State: {new_state.value}\n"
+            f"IP Address: {ip}\n"
+            f"MAC Address: {mac}\n"
+            f"Network: {self.devices['client']['network']}\n"
+            f"Lease Remaining: {lease}"
         )
 
-        self.add_log(
-            f"    IP: {device['ip']}"
-        )
+        # Only update the panel if Client A is currently selected
+        if getattr(self, "selected_device", None) == "client":
+            self.info_label.config(text=info)
 
-        self.add_log(
-            f"    MAC: {device['mac']}"
-        )
-
-        self.add_log(
-            f"    Network: {device['network']}"
-        )
-
+        # Run again after 1 second
+        self.root.after(1000, self.update_client_info)
     # ==========================================
     # Event log
     # ==========================================
@@ -305,6 +438,85 @@ class DHCPTopologyUI:
         self.log.see("end")
 
         self.log.config(state="disabled")
+
+        # ==========================================
+    # Animate packet
+    # ==========================================
+
+    def animate_packet(
+        self,
+        start,
+        end,
+        message,
+        callback=None,
+        steps=30
+    ):
+        """
+        Animates a DHCP packet from one device
+        to another.
+        """
+
+        # Remove previous packet
+        if self.packet is not None:
+            self.canvas.delete(self.packet)
+
+        x1, y1 = start
+        x2, y2 = end
+
+        # Create packet
+        self.packet = self.canvas.create_oval(
+            x1 - 8,
+            y1 - 8,
+            x1 + 8,
+            y1 + 8,
+            fill="blue",
+            outline="black"
+        )
+
+        # Packet label
+        label = self.canvas.create_text(
+            x1,
+            y1 - 20,
+            text=message,
+            font=("Arial", 9, "bold")
+        )
+
+        def move_packet(step):
+
+            if step > steps:
+
+                self.canvas.delete(label)
+
+                if callback:
+                    callback()
+
+                return
+
+            progress = step / steps
+
+            x = x1 + (x2 - x1) * progress
+            y = y1 + (y2 - y1) * progress
+
+            self.canvas.coords(
+                self.packet,
+                x - 8,
+                y - 8,
+                x + 8,
+                y + 8
+            )
+
+            self.canvas.coords(
+                label,
+                x,
+                y - 20
+            )
+
+            self.root.after(
+                30,
+                lambda: move_packet(step + 1)
+            )
+
+        move_packet(0)
 
     # ==========================================
     # Start DHCP
@@ -359,9 +571,13 @@ class DHCPTopologyUI:
 
         self.highlight_device("client")
 
-        self.root.after(
-            800,
-            lambda: self.forward_discover(discover)
+        self.animate_packet(
+            self.positions["client"],
+            self.positions["switch"],
+            "DHCPDISCOVER",
+            callback=lambda: self.animate_discover_to_relay(
+                discover
+            )
         )
 
     # ==========================================
@@ -376,26 +592,46 @@ class DHCPTopologyUI:
             "[RELAY] R1 forwarding DHCPDISCOVER → S1"
         )
 
-        self.root.after(
-            800,
-            lambda: self.receive_offer(
-                self.relay.forward_discover(
-                    discover,
-                    self.server
-                )
+        offer = self.relay.forward_discover(
+            discover,
+            self.server
+        )
+
+        self.animate_packet(
+            self.positions["relay"],
+            self.positions["server"],
+            "DHCPDISCOVER",
+            callback=lambda: self.receive_offer(
+                offer
+            )
+        )
+
+    # ==========================================
+    # Animate DISCOVER from Switch to Relay
+    # ==========================================
+
+    def animate_discover_to_relay(self, discover):
+
+        self.highlight_device("switch")
+
+        self.animate_packet(
+            self.positions["switch"],
+            self.positions["relay"],
+            "DHCPDISCOVER",
+            callback=lambda: self.forward_discover(
+                discover
             )
         )
 
     # ==========================================
     # DHCPOFFER
     # ==========================================
-
     def receive_offer(self, offer):
 
         self.highlight_device("server")
 
         self.add_log(
-            f"[DHCPOFFER] S1 → Relay R1 → Client A"
+            "[DHCPOFFER] S1 → Relay R1 → Client A"
         )
 
         self.add_log(
@@ -404,9 +640,37 @@ class DHCPTopologyUI:
 
         self.client.receive_offer(offer)
 
-        self.root.after(
-            800,
-            self.send_request
+        self.animate_packet(
+            self.positions["server"],
+            self.positions["relay"],
+            "DHCPOFFER",
+            callback=lambda: self.animate_offer_to_switch(
+                offer
+            )
+        )
+
+    def animate_offer_to_switch(self, offer):
+
+        self.highlight_device("relay")
+
+        self.animate_packet(
+            self.positions["relay"],
+            self.positions["switch"],
+            "DHCPOFFER",
+            callback=lambda: self.animate_offer_to_client(
+                offer
+            )
+        )
+
+    def animate_offer_to_client(self, offer):
+
+        self.highlight_device("switch")
+
+        self.animate_packet(
+            self.positions["switch"],
+            self.positions["client"],
+            "DHCPOFFER",
+            callback=self.send_request
         )
 
     # ==========================================
@@ -444,9 +708,39 @@ class DHCPTopologyUI:
             f"    Requested IP: {selected_offer.offered_ip}"
         )
 
-        self.root.after(
-            800,
-            lambda: self.forward_request(request)
+        self.animate_packet(
+            self.positions["client"],
+            self.positions["switch"],
+            "DHCPREQUEST",
+            callback=lambda: self.animate_request_to_relay(
+                request
+            )
+        )
+
+    def animate_request_to_relay(self, request):
+
+        self.highlight_device("switch")
+
+        self.animate_packet(
+            self.positions["switch"],
+            self.positions["relay"],
+            "DHCPREQUEST",
+            callback=lambda: self.forward_request(
+                request
+            )
+        )
+
+    def animate_renewal_request_to_relay(self, request):
+
+        self.highlight_device("switch")
+
+        self.animate_packet(
+            self.positions["switch"],
+            self.positions["relay"],
+            "DHCPREQUEST",
+            callback=lambda: self.forward_renewal_request(
+                request
+            )
         )
 
     # ==========================================
@@ -461,13 +755,99 @@ class DHCPTopologyUI:
             "[RELAY] R1 forwarding DHCPREQUEST → S1"
         )
 
-        self.root.after(
-            800,
-            lambda: self.receive_ack(
-                self.relay.forward_request(
-                    request,
-                    self.server
+        ack = self.relay.forward_request(
+            request,
+            self.server
+        )
+
+        self.animate_packet(
+            self.positions["relay"],
+            self.positions["server"],
+            "DHCPREQUEST",
+            callback=lambda: self.receive_ack(
+                ack
+            )
+        )
+
+    # ==========================================
+    # Relay forwards RENEWAL REQUEST
+    # ==========================================
+
+    def forward_renewal_request(self, request):
+
+        self.highlight_device("relay")
+
+        self.add_log(
+            "[RELAY] R1 forwarding renewal REQUEST → S1"
+        )
+
+        ack = self.relay.forward_request(
+            request,
+            self.server
+        )
+
+        self.animate_packet(
+            self.positions["relay"],
+            self.positions["server"],
+            "DHCPREQUEST",
+            callback=lambda: self.receive_renewal_ack(
+                ack
+            )
+        )
+
+    def receive_renewal_ack(self, ack):
+
+        self.highlight_device("server")
+
+        if ack.message_type == DHCPMessageType.ACK:
+
+            self.add_log(
+                "[DHCPACK] S1 → Relay R1 → Client A"
+            )
+
+            self.add_log(
+                "[RENEWAL SUCCESS] Lease renewed."
+            )
+
+            self.animate_packet(
+                self.positions["server"],
+                self.positions["relay"],
+                "DHCPACK",
+                callback=lambda: self.animate_renewal_ack_to_switch(
+                    ack
                 )
+            )
+
+        else:
+
+            self.add_log(
+                "[DHCPNAK] Renewal rejected."
+            )
+
+    def animate_renewal_ack_to_switch(self, ack):
+
+        self.highlight_device("relay")
+
+        self.animate_packet(
+            self.positions["relay"],
+            self.positions["switch"],
+            "DHCPACK",
+            callback=lambda: self.animate_renewal_ack_to_client(
+                ack
+            )
+        )
+
+
+    def animate_renewal_ack_to_client(self, ack):
+
+        self.highlight_device("switch")
+
+        self.animate_packet(
+            self.positions["switch"],
+            self.positions["client"],
+            "DHCPACK",
+            callback=lambda: self.complete_renewal(
+                ack
             )
         )
 
@@ -489,18 +869,13 @@ class DHCPTopologyUI:
                 f"    Assigned IP: {ack.offered_ip}"
             )
 
-            self.client.receive_ack(
-                ack.offered_ip,
-                lease_duration=self.server.lease_duration
-            )
-
-            self.devices["client"]["ip"] = (
-                self.client.ip_address
-            )
-
-            self.root.after(
-                800,
-                self.finish_dhcp
+            self.animate_packet(
+                self.positions["server"],
+                self.positions["relay"],
+                "DHCPACK",
+                callback=lambda: self.animate_ack_to_switch(
+                    ack
+                )
             )
 
         else:
@@ -512,6 +887,47 @@ class DHCPTopologyUI:
             self.start_button.config(
                 state="normal"
             )
+
+    def animate_ack_to_switch(self, ack):
+
+        self.highlight_device("relay")
+
+        self.animate_packet(
+            self.positions["relay"],
+            self.positions["switch"],
+            "DHCPACK",
+            callback=lambda: self.animate_ack_to_client(
+                ack
+            )
+        )
+
+    def animate_ack_to_client(self, ack):
+
+        self.highlight_device("switch")
+
+        self.animate_packet(
+            self.positions["switch"],
+            self.positions["client"],
+            "DHCPACK",
+            callback=lambda: self.complete_ack(
+                ack
+            )
+        )
+
+    def complete_ack(self, ack):
+
+        self.highlight_device("client")
+
+        self.client.receive_ack(
+            ack.offered_ip,
+            lease_duration=self.server.lease_duration
+        )
+
+        self.devices["client"]["ip"] = (
+            self.client.ip_address
+        )
+
+        self.finish_dhcp()
 
     # ==========================================
     # Finish
@@ -539,6 +955,43 @@ class DHCPTopologyUI:
 
         self.start_button.config(
             state="normal"
+        )
+
+    def start_renewal(self):
+        """Start DHCP lease renewal."""
+
+        if self.client.ip_address is None:
+            return
+
+        self.add_log("")
+        self.add_log("========== DHCP RENEWAL ==========")
+
+        self.add_log(
+            "[RENEWING] Client A lease reached T1."
+        )
+
+        self.add_log(
+            "[DHCPREQUEST] Client A → Relay R1 → S1"
+        )
+
+        request = DHCPMessage(
+            message_type=DHCPMessageType.REQUEST,
+            source=self.client.client_id,
+            destination=self.server.server_id,
+            client_id=self.client.client_id,
+            client_mac=self.client.mac_address,
+            offered_ip=self.client.ip_address
+        )
+
+        self.highlight_device("client")
+
+        self.animate_packet(
+            self.positions["client"],
+            self.positions["switch"],
+            "DHCPREQUEST",
+            callback=lambda: self.animate_renewal_request_to_relay(
+                request
+            )
         )
 
     # ==========================================
@@ -598,6 +1051,30 @@ class DHCPTopologyUI:
             state="normal"
         )
 
+
+    def complete_renewal(self, ack):
+
+        self.highlight_device("client")
+
+        if ack.message_type == DHCPMessageType.ACK:
+
+            self.client.receive_ack(
+                ack.offered_ip,
+                lease_duration=self.server.lease_duration
+            )
+
+            self.devices["client"]["ip"] = (
+                self.client.ip_address
+            )
+
+            self.add_log(
+                "[SUCCESS] Client A returned to BOUND."
+            )
+
+            self.add_log(
+                f"[LEASE] New lease: "
+                f"{self.server.lease_duration} seconds"
+            )
 
 # ==========================================
 # Run
