@@ -79,16 +79,17 @@ class DHCPTopologyUI:
 
         self.device_shapes = {}
 
+        self.selected_device = None
+
         self.packet = None
 
 
         self.positions = {
-            "client": (130, 180),
-            "switch": (380, 180),
-            "relay": (650, 180),
-            "server": (930, 180)
+            "client": (130, 210),
+            "switch": (360, 210),
+            "relay": (600, 210),
+            "server": (850, 210)
         }
-
         self.create_widgets()
 
     # ==========================================
@@ -97,116 +98,556 @@ class DHCPTopologyUI:
 
     def create_widgets(self):
 
-        title = tk.Label(
-            self.root,
-            text="DHCP SIMULATOR",
-            font=("Arial", 22, "bold")
+        # ==========================================
+        # Main window styling
+        # ==========================================
+
+        self.root.configure(bg="#f4f6f8")
+
+        style = ttk.Style()
+
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        style.configure(
+            "Title.TLabel",
+            font=("Segoe UI", 22, "bold"),
+            background="#1f2937",
+            foreground="white"
         )
 
-        title.pack(pady=10)
+        style.configure(
+            "Subtitle.TLabel",
+            font=("Segoe UI", 10),
+            background="#1f2937",
+            foreground="#d1d5db"
+        )
+
+        style.configure(
+            "Panel.TLabelframe",
+            background="#ffffff"
+        )
+
+        style.configure(
+            "Panel.TLabelframe.Label",
+            font=("Segoe UI", 10, "bold")
+        )
+
+        style.configure(
+            "Control.TButton",
+            font=("Segoe UI", 10, "bold"),
+            padding=(14, 8)
+        )
+
+        # ==========================================
+        # Header
+        # ==========================================
+
+        header = tk.Frame(
+            self.root,
+            bg="#1f2937",
+            height=75
+        )
+
+        header.pack(
+            fill="x",
+            side="top"
+        )
+
+        header.pack_propagate(False)
+
+        title_frame = tk.Frame(
+            header,
+            bg="#1f2937"
+        )
+
+        title_frame.pack(
+            side="left",
+            padx=25,
+            pady=10
+        )
+
+        tk.Label(
+            title_frame,
+            text="DHCP NETWORK SIMULATOR",
+            font=("Segoe UI", 21, "bold"),
+            bg="#1f2937",
+            fg="white"
+        ).pack(anchor="w")
+
+        tk.Label(
+            title_frame,
+            text="Visualize DHCP allocation, leases, renewal and network communication",
+            font=("Segoe UI", 9),
+            bg="#1f2937",
+            fg="#cbd5e1"
+        ).pack(anchor="w")
+
+        # Simulation status
+
+        status_frame = tk.Frame(
+            header,
+            bg="#1f2937"
+        )
+
+        status_frame.pack(
+            side="right",
+            padx=25
+        )
+
+        self.status_indicator = tk.Label(
+            status_frame,
+            text="● READY",
+            font=("Segoe UI", 11, "bold"),
+            bg="#1f2937",
+            fg="#22c55e"
+        )
+
+        self.status_indicator.pack()
+
+        # ==========================================
+        # Main content area
+        # ==========================================
+
+        main_frame = tk.Frame(
+            self.root,
+            bg="#f4f6f8"
+        )
+
+        main_frame.pack(
+            fill="both",
+            expand=True,
+            padx=15,
+            pady=12
+        )
+
+        # ==========================================
+        # Left sidebar
+        # ==========================================
+
+        sidebar = tk.Frame(
+            main_frame,
+            bg="white",
+            width=210,
+            bd=1,
+            relief="solid"
+        )
+
+        sidebar.pack(
+            side="left",
+            fill="y",
+            padx=(0, 12)
+        )
+
+        sidebar.pack_propagate(False)
+
+        tk.Label(
+            sidebar,
+            text="DEVICES",
+            font=("Segoe UI", 11, "bold"),
+            bg="white",
+            fg="#374151"
+        ).pack(
+            anchor="w",
+            padx=15,
+            pady=(15, 10)
+        )
+
+        self.device_list_frame = tk.Frame(
+            sidebar,
+            bg="white"
+        )
+
+        self.device_list_frame.pack(
+            fill="both",
+            expand=True,
+            padx=10
+        )
+
+        # Client
+
+        self.create_device_list_item(
+            "client",
+            "●  Client A",
+            "DHCP Client"
+        )
+
+        # Switch
+
+        self.create_device_list_item(
+            "switch",
+            "◆  Switch 1",
+            "Layer 2 Switch"
+        )
+
+        # Relay
+
+        self.create_device_list_item(
+            "relay",
+            "↔  Relay R1",
+            "DHCP Relay"
+        )
+
+        # Server
+
+        self.create_device_list_item(
+            "server",
+            "■  Server S1",
+            "DHCP Server"
+        )
+
+        # ==========================================
+        # Center area
+        # ==========================================
+
+        center_frame = tk.Frame(
+            main_frame,
+            bg="#f4f6f8"
+        )
+
+        center_frame.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
+
+        # ------------------------------------------
+        # Topology panel
+        # ------------------------------------------
+
+        topology_frame = ttk.LabelFrame(
+            center_frame,
+            text="Network Topology",
+            style="Panel.TLabelframe"
+        )
+
+        topology_frame.pack(
+            fill="both",
+            expand=True
+        )
 
         self.canvas = tk.Canvas(
-            self.root,
-            bg="white",
-            height=430
+            topology_frame,
+            bg="#f8fafc",
+            highlightthickness=0
         )
 
         self.canvas.pack(
             fill="both",
             expand=True,
-            padx=20,
-            pady=10
+            padx=8,
+            pady=8
         )
 
-        # Device Information Panel
+        # ==========================================
+        # Bottom controls
+        # ==========================================
+
+        controls = tk.Frame(
+            center_frame,
+            bg="#f4f6f8"
+        )
+
+        controls.pack(
+            fill="x",
+            pady=(10, 0)
+        )
+
+        self.start_button = tk.Button(
+            controls,
+            text="▶  Start DHCP",
+            command=self.start_dhcp,
+            font=("Segoe UI", 10, "bold"),
+            bg="#2563eb",
+            fg="white",
+            activebackground="#1d4ed8",
+            activeforeground="white",
+            relief="flat",
+            padx=18,
+            pady=8,
+            cursor="hand2"
+        )
+
+        self.start_button.pack(
+            side="left",
+            padx=(0, 8)
+        )
+
+        tk.Button(
+            controls,
+            text="↻  Reset",
+            command=self.reset,
+            font=("Segoe UI", 10, "bold"),
+            bg="#e5e7eb",
+            fg="#374151",
+            activebackground="#d1d5db",
+            relief="flat",
+            padx=18,
+            pady=8,
+            cursor="hand2"
+        ).pack(
+            side="left"
+        )
+
+        # Future buttons
+
+        tk.Button(
+            controls,
+            text="+ Client",
+            font=("Segoe UI", 10),
+            bg="white",
+            fg="#374151",
+            relief="solid",
+            bd=1,
+            padx=14,
+            pady=7,
+            state="disabled"
+        ).pack(
+            side="right",
+            padx=4
+        )
+
+        tk.Button(
+            controls,
+            text="+ Server",
+            font=("Segoe UI", 10),
+            bg="white",
+            fg="#374151",
+            relief="solid",
+            bd=1,
+            padx=14,
+            pady=7,
+            state="disabled"
+        ).pack(
+            side="right",
+            padx=4
+        )
+
+        # ==========================================
+        # Right information panel
+        # ==========================================
+
+        right_panel = tk.Frame(
+            main_frame,
+            bg="#f4f6f8",
+            width=270
+        )
+
+        right_panel.pack(
+            side="right",
+            fill="y",
+            padx=(12, 0)
+        )
+
+        right_panel.pack_propagate(False)
+
+        # ------------------------------------------
+        # Device information
+        # ------------------------------------------
 
         info_frame = ttk.LabelFrame(
-            self.root,
-            text="Device Information"
+            right_panel,
+            text="Device Information",
+            style="Panel.TLabelframe"
         )
 
         info_frame.pack(
             fill="x",
-            padx=20,
-            pady=5
+            pady=(0, 10)
         )
 
         self.info_label = tk.Label(
             info_frame,
-            text="Click a device to view its information.",
-            font=("Arial", 10),
+            text="Select a device\n\nto view information.",
+            font=("Segoe UI", 9),
+            bg="white",
+            fg="#4b5563",
             justify="left",
-            anchor="w"
+            anchor="nw"
         )
 
         self.info_label.pack(
             fill="x",
-            padx=10,
-            pady=8
+            padx=12,
+            pady=12
         )
 
+        # ------------------------------------------
+        # Current DHCP state
+        # ------------------------------------------
+
+        state_frame = ttk.LabelFrame(
+            right_panel,
+            text="DHCP State",
+            style="Panel.TLabelframe"
+        )
+
+        state_frame.pack(
+            fill="x",
+            pady=(0, 10)
+        )
+
+        self.state_label = tk.Label(
+            state_frame,
+            text="INIT",
+            font=("Segoe UI", 18, "bold"),
+            bg="white",
+            fg="#6b7280"
+        )
+
+        self.state_label.pack(
+            pady=15
+        )
+
+        # ------------------------------------------
+        # Lease information
+        # ------------------------------------------
+
+        lease_frame = ttk.LabelFrame(
+            right_panel,
+            text="Lease",
+            style="Panel.TLabelframe"
+        )
+
+        lease_frame.pack(
+            fill="x",
+            pady=(0, 10)
+        )
+
+        self.lease_label = tk.Label(
+            lease_frame,
+            text="No active lease",
+            font=("Segoe UI", 9),
+            bg="white",
+            fg="#4b5563",
+            justify="left"
+        )
+
+        self.lease_label.pack(
+            anchor="w",
+            padx=12,
+            pady=12
+        )
+
+        # ==========================================
         # Event log
+        # ==========================================
 
         log_frame = ttk.LabelFrame(
             self.root,
-            text="Event Log"
+            text="Event Log",
+            style="Panel.TLabelframe"
         )
 
         log_frame.pack(
             fill="x",
-            padx=20,
-            pady=5
+            padx=15,
+            pady=(0, 12)
         )
 
         self.log = tk.Text(
             log_frame,
-            height=8,
+            height=7,
+            font=("Consolas", 9),
+            bg="#111827",
+            fg="#e5e7eb",
+            insertbackground="white",
+            relief="flat",
             state="disabled"
         )
 
         self.log.pack(
             fill="x",
-            padx=5,
-            pady=5
+            padx=6,
+            pady=6
         )
 
-        # Buttons
-
-        button_frame = tk.Frame(self.root)
-        button_frame.pack(pady=10)
-
-        self.start_button = ttk.Button(
-            button_frame,
-            text="Start DHCP",
-            command=self.start_dhcp
-        )
-
-        self.start_button.pack(
-            side="left",
-            padx=10
-        )
-
-        ttk.Button(
-            button_frame,
-            text="Reset",
-            command=self.reset
-        ).pack(
-            side="left",
-            padx=10
-        )
+        # ==========================================
+        # Initial state
+        # ==========================================
 
         self.draw_topology()
-
-        self.selected_device = None
 
         self.root.after(
             1000,
             self.update_client_info
         )
 
-        self.add_log("[INFO] Simulator ready.")
         self.add_log(
-            "[INFO] Click a device to view its information."
+            "[INFO] Simulator ready."
+        )
+
+        self.add_log(
+            "[INFO] Select a device to view its information."
+        )
+
+
+    def create_device_list_item(
+        self,
+        device_id,
+        title,
+        subtitle
+    ):
+
+        frame = tk.Frame(
+            self.device_list_frame,
+            bg="white",
+            cursor="hand2"
+        )
+
+        frame.pack(
+            fill="x",
+            pady=4
+        )
+
+        title_label = tk.Label(
+            frame,
+            text=title,
+            font=("Segoe UI", 10, "bold"),
+            bg="white",
+            fg="#1f2937",
+            anchor="w"
+        )
+
+        title_label.pack(
+            fill="x",
+            padx=8,
+            pady=(6, 0)
+        )
+
+        subtitle_label = tk.Label(
+            frame,
+            text=subtitle,
+            font=("Segoe UI", 8),
+            bg="white",
+            fg="#6b7280",
+            anchor="w"
+        )
+
+        subtitle_label.pack(
+            fill="x",
+            padx=8,
+            pady=(0, 6)
+        )
+
+        def select_device(event=None):
+            self.show_device_info(device_id)
+
+        frame.bind(
+            "<Button-1>",
+            select_device
+        )
+
+        title_label.bind(
+            "<Button-1>",
+            select_device
+        )
+
+        subtitle_label.bind(
+            "<Button-1>",
+            select_device
         )
 
     # ==========================================
@@ -215,29 +656,96 @@ class DHCPTopologyUI:
 
     def draw_topology(self):
 
+        self.canvas.delete("all")
+
         positions = self.positions
 
+        # ==========================================
+        # Network labels
+        # ==========================================
+
+        self.canvas.create_text(
+            260,
+            45,
+            text="CLIENT NETWORK",
+            font=("Segoe UI", 10, "bold"),
+            fill="#64748b"
+        )
+
+        self.canvas.create_text(
+            780,
+            45,
+            text="SERVER NETWORK",
+            font=("Segoe UI", 10, "bold"),
+            fill="#64748b"
+        )
+
+        self.canvas.create_text(
+            260,
+            68,
+            text="192.168.2.0/24",
+            font=("Consolas", 9),
+            fill="#94a3b8"
+        )
+
+        self.canvas.create_text(
+            780,
+            68,
+            text="192.168.1.0/24",
+            font=("Consolas", 9),
+            fill="#94a3b8"
+        )
+
+        # ==========================================
+        # Network separator
+        # ==========================================
+
+        self.canvas.create_line(
+            770,
+            90,
+            770,
+            330,
+            fill="#cbd5e1",
+            dash=(5, 5),
+            width=2
+        )
+
+        self.canvas.create_text(
+            770,
+            105,
+            text="SUBNET BOUNDARY",
+            font=("Segoe UI", 8),
+            fill="#94a3b8",
+            angle=90
+        )
+
+        # ==========================================
         # Connections
+        # ==========================================
 
-        self.canvas.create_line(
-            190, 180,
-            320, 180,
-            width=3
-        )
+        connections = [
+            ("client", "switch"),
+            ("switch", "relay"),
+            ("relay", "server")
+        ]
 
-        self.canvas.create_line(
-            440, 180,
-            590, 180,
-            width=3
-        )
+        for source, destination in connections:
 
-        self.canvas.create_line(
-            710, 180,
-            870, 180,
-            width=3
-        )
+            x1, y1 = positions[source]
+            x2, y2 = positions[destination]
 
+            self.canvas.create_line(
+                x1 + 65,
+                y1,
+                x2 - 65,
+                y2,
+                fill="#94a3b8",
+                width=3
+            )
+
+        # ==========================================
         # Devices
+        # ==========================================
 
         for device_id, position in positions.items():
 
@@ -264,37 +772,115 @@ class DHCPTopologyUI:
         device_type
     ):
 
-        width = 120
-        height = 80
+        width = 130
+        height = 85
+
+        # ==========================================
+        # Device colors
+        # ==========================================
+
+        device_colors = {
+            "client": "#2563eb",
+            "switch": "#7c3aed",
+            "relay": "#ea580c",
+            "server": "#16a34a"
+        }
+
+        accent = device_colors.get(
+            device_id,
+            "#64748b"
+        )
+
+        # ==========================================
+        # Device body
+        # ==========================================
 
         rectangle = self.canvas.create_rectangle(
             x - width // 2,
             y - height // 2,
             x + width // 2,
             y + height // 2,
-            outline="black",
+            outline="#cbd5e1",
             width=2,
-            fill="white"
+            fill="white",
+            tags=("device", device_id)
         )
+
+        # ==========================================
+        # Accent bar
+        # ==========================================
+
+        self.canvas.create_rectangle(
+            x - width // 2,
+            y - height // 2,
+            x - width // 2 + 7,
+            y + height // 2,
+            outline=accent,
+            fill=accent,
+            tags=("device", device_id)
+        )
+
+        # ==========================================
+        # Device icon
+        # ==========================================
+
+        icons = {
+            "client": "▣",
+            "switch": "◆",
+            "relay": "↔",
+            "server": "▤"
+        }
 
         self.canvas.create_text(
             x,
-            y - 15,
+            y - 23,
+            text=icons.get(device_id, "●"),
+            font=("Segoe UI", 18, "bold"),
+            fill=accent,
+            tags=("device", device_id)
+        )
+
+        # ==========================================
+        # Name
+        # ==========================================
+
+        self.canvas.create_text(
+            x,
+            y + 2,
             text=name,
-            font=("Arial", 12, "bold")
+            font=("Segoe UI", 10, "bold"),
+            fill="#1f2937",
+            tags=("device", device_id)
         )
+
+        # ==========================================
+        # Type
+        # ==========================================
 
         self.canvas.create_text(
             x,
-            y + 15,
+            y + 21,
             text=device_type,
-            font=("Arial", 9)
+            font=("Segoe UI", 8),
+            fill="#6b7280",
+            tags=("device", device_id)
         )
 
         self.device_shapes[device_id] = rectangle
 
+        # ==========================================
+        # Click handling
+        # ==========================================
+
         self.canvas.tag_bind(
             rectangle,
+            "<Button-1>",
+            lambda event, d=device_id:
+            self.show_device_info(d)
+        )
+
+        self.canvas.tag_bind(
+            device_id,
             "<Button-1>",
             lambda event, d=device_id:
             self.show_device_info(d)
@@ -414,6 +1000,37 @@ class DHCPTopologyUI:
             f"MAC Address: {mac}\n"
             f"Network: {self.devices['client']['network']}\n"
             f"Lease Remaining: {lease}"
+        )
+
+        # ==========================================
+        # Update dashboard state
+        # ==========================================
+
+        self.state_label.config(
+            text=new_state.value
+        )
+
+        state_colors = {
+            "INIT": "#6b7280",
+            "SELECTING": "#2563eb",
+            "REQUESTING": "#f59e0b",
+            "BOUND": "#16a34a",
+            "RENEWING": "#ea580c",
+            "REBINDING": "#dc2626"
+        }
+
+        self.state_label.config(
+            fg=state_colors.get(
+                new_state.value,
+                "#6b7280"
+            )
+        )
+
+        self.lease_label.config(
+            text=(
+                f"IP Address: {ip}\n"
+                f"Remaining: {lease}"
+            )
         )
 
         # Only update the panel if Client A is currently selected
@@ -1000,21 +1617,45 @@ class DHCPTopologyUI:
 
     def highlight_device(self, device_id):
 
+        # Reset all device outlines
+
         for shape_id in self.device_shapes.values():
+
             self.canvas.itemconfig(
                 shape_id,
-                outline="black",
+                outline="#cbd5e1",
                 width=2
             )
 
-        shape = self.device_shapes.get(device_id)
+        # Highlight selected/active device
+
+        shape = self.device_shapes.get(
+            device_id
+        )
 
         if shape:
+
             self.canvas.itemconfig(
                 shape,
-                outline="blue",
+                outline="#2563eb",
                 width=4
             )
+
+        # Update sidebar selection visually
+
+        if hasattr(self, "device_list_frame"):
+
+            for widget in self.device_list_frame.winfo_children():
+
+                widget.configure(
+                    bg="white"
+                )
+
+                for child in widget.winfo_children():
+
+                    child.configure(
+                        bg="white"
+                    )
 
     # ==========================================
     # Reset
