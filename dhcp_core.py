@@ -409,3 +409,40 @@ class DHCPClient:
             self.state = DHCPClientState.RENEWING
 
         return self.state
+
+    def choose_best_offer(self):
+        """
+        Selects one offer from the available DHCP offers.
+
+        For now, the client chooses the first valid offer.
+        Later, we can add server priority and network rules.
+        """
+        if not self.offers:
+            return None
+
+        valid_offers = [
+            offer
+            for offer in self.offers
+            if offer.message_type == DHCPMessageType.OFFER
+            and offer.offered_ip is not None
+        ]
+
+        if not valid_offers:
+            return None
+
+        selected_offer = valid_offers[0]
+
+        self.select_offer(selected_offer)
+
+        return selected_offer
+
+    def receive_offers(self, offers):
+        """
+        Receives offers from multiple DHCP servers.
+        """
+        self.offers.clear()
+
+        for offer in offers:
+            self.receive_offer(offer)
+
+        return self.offers
