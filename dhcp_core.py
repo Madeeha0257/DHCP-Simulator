@@ -269,6 +269,66 @@ class DHCPServer:
     def get_lease(self, client_id):
         return self.leases.get(client_id)
 
+class DHCPRelayAgent:
+    def __init__(
+        self,
+        relay_id,
+        relay_ip,
+        client_network,
+        server_network
+    ):
+        self.relay_id = relay_id
+        self.relay_ip = relay_ip
+        self.client_network = client_network
+        self.server_network = server_network
+
+    def forward_discover(self, message, server):
+        """
+        Forwards a DHCPDISCOVER from the client
+        to the DHCP server.
+        """
+
+        print(
+            f"[Relay {self.relay_id}] "
+            f"Forwarding DHCPDISCOVER "
+            f"from {message.client_id} "
+            f"to {server.server_id}"
+        )
+
+        return server.discover(message.client_id)
+
+    def forward_request(self, message, server):
+        """
+        Forwards a DHCPREQUEST from the client
+        to the DHCP server.
+        """
+
+        print(
+            f"[Relay {self.relay_id}] "
+            f"Forwarding DHCPREQUEST "
+            f"from {message.client_id} "
+            f"to {server.server_id}"
+        )
+
+        return server.request(
+            message.client_id,
+            message.offered_ip
+        )
+
+    def forward_response(self, message, client):
+        """
+        Forwards the DHCP server response
+        back to the client.
+        """
+
+        print(
+            f"[Relay {self.relay_id}] "
+            f"Forwarding {message.message_type.value} "
+            f"from DHCP server "
+            f"to {client.client_id}"
+        )
+
+        return message
 
 class DHCPClient:
     def __init__(self, client_id, mac_address=None):
