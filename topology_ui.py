@@ -1411,39 +1411,59 @@ class DHCPTopologyUI:
     # DHCPDISCOVER
     # ==========================================
 
-    def send_discover(self):
+    def send_discover(self, client_id="Client A"):
 
-        self.client.state = self.client.state.INIT
+        client = self.clients.get(client_id)
 
-        if self.client.mac_address is None:
+        if client is None:
+            self.add_log(
+                f"[ERROR] Client {client_id} not found."
+            )
+            return
+
+        client.state = self.client.state.INIT
+
+        if client.mac_address is None:
             mac = self.server.get_mac_address(
-                self.client.client_id
+                client.client_id
             )
 
-            self.client.assign_mac(mac)
+            client.assign_mac(mac)
 
-        self.devices["client"]["mac"] = self.client.mac_address
+        self.devices["client"]["mac"] = client.mac_address
 
         discover = DHCPMessage(
             message_type=DHCPMessageType.DISCOVER,
-            source=self.client.client_id,
+            source=client.client_id,
             destination="255.255.255.255",
-            client_id=self.client.client_id,
-            client_mac=self.client.mac_address
+            client_id=client.client_id,
+            client_mac=client.mac_address
         )
 
         self.add_log(
-            "[DHCPDISCOVER] Client A → Switch → Relay R1"
+            f"[DHCPDISCOVER] {client_id} → Switch → Relay R1"
         )
 
         self.add_log(
-            f"    MAC: {self.client.mac_address}"
+            f"    MAC: {client.mac_address}"
         )
 
         self.highlight_device("client")
 
+        client_position = self.client_positions.get(
+            client_id
+        )
+
+        if client_position is None:
+            self.add_log(
+                f"[ERROR] No topology position for {client_id}."
+            )
+            return
+
+        self.highlight_device(client_id)
+
         self.animate_packet(
-            self.positions["client"],
+            client_position,
             self.positions["switch"],
             "DHCPDISCOVER",
             callback=lambda: self.animate_discover_to_relay(
@@ -1496,29 +1516,42 @@ class DHCPTopologyUI:
 
     # ==========================================
     # DHCPOFFER
-    # ==========================================
-    def receive_offer(self, offer):
+    # =========================================
+
+    def receive_ack(self, ack):
 
         self.highlight_device("server")
 
-        self.add_log(
-            "[DHCPOFFER] S1 → Relay R1 → Client A"
-        )
+        if ack.message_type == DHCPMessageType.ACK:
 
-        self.add_log(
-            f"    Offered IP: {offer.offered_ip}"
-        )
-
-        self.client.receive_offer(offer)
-
-        self.animate_packet(
-            self.positions["server"],
-            self.positions["relay"],
-            "DHCPOFFER",
-            callback=lambda: self.animate_offer_to_switch(
-                offer
+            self.add_log(
+                f"[DHCPACK] S1 → Relay R1 → "
+                f"{ack.client_id}"
             )
-        )
+
+            self.add_log(
+                f"    Assigned IP: {ack.offered_ip}"
+            )
+
+            self.animate_packet(
+                self.positions["server"],
+                self.positions["relay"],
+                "DHCPACK",
+                callback=lambda: self.animate_ack_to_switch(
+                    ack
+                )
+            )
+
+        else:
+
+            self.add_log(
+                f"[DHCPNAK] "
+                f"{ack.client_id} request rejected."
+            )
+
+            self.start_button.config(
+                state="normal"
+            )
 
     def animate_offer_to_switch(self, offer):
 
@@ -1535,52 +1568,98 @@ class DHCPTopologyUI:
 
     def animate_offer_to_client(self, offer):
 
-        self.highlight_device("switch")
+        self.highlight_device(
+            offer.client_id
+        )
+
+        client_position = self.client_positions.get(
+            offer.client_id
+        )
+
+        if client_position is None:
+
+            self.add_log(
+                f"[ERROR] No topology position for "
+                f"{offer.client_id}."
+            )
+
+            return
 
         self.animate_packet(
             self.positions["switch"],
-            self.positions["client"],
+            client_position,
             "DHCPOFFER",
-            callback=self.send_request
+            callback=lambda: self.send_request(
+                offer.client_id
+            )
         )
 
     # ==========================================
     # DHCPREQUEST
     # ==========================================
 
-    def send_request(self):
+    def send_request(self, client_id="Client A"):
 
-        selected_offer = self.client.choose_best_offer()
+        client = self.clients.get(client_id)
+
+        if client is None:
+            self.add_log(
+                f"[ERROR] Client {client_id} not found."
+            )
+            return
+
+        selected_offer = client.choose_best_offer()
 
         if selected_offer is None:
+
             self.add_log(
-                "[ERROR] No valid DHCP offer received."
+                f"[ERROR] {client_id} has no valid DHCP offer."
             )
 
-            self.start_button.config(state="normal")
+            self.start_button.config(
+                state="normal"
+            )
+
             return
 
         request = DHCPMessage(
             message_type=DHCPMessageType.REQUEST,
-            source=self.client.client_id,
+            source=client.client_id,
             destination=selected_offer.source,
-            client_id=self.client.client_id,
-            client_mac=self.client.mac_address,
+            client_id=client.client_id,
+            client_mac=client.mac_address,
             offered_ip=selected_offer.offered_ip
         )
 
-        self.highlight_device("client")
-
-        self.add_log(
-            "[DHCPREQUEST] Client A → Relay R1 → S1"
+        self.highlight_device(
+            client_id
         )
 
         self.add_log(
-            f"    Requested IP: {selected_offer.offered_ip}"
+            f"[DHCPREQUEST] "
+            f"{client_id} → Relay R1 → S1"
         )
+
+        self.add_log(
+            f"    Requested IP: "
+            f"{selected_offer.offered_ip}"
+        )
+
+        client_position = self.client_positions.get(
+            client_id
+        )
+
+        if client_position is None:
+
+            self.add_log(
+                f"[ERROR] No topology position for "
+                f"{client_id}."
+            )
+
+            return
 
         self.animate_packet(
-            self.positions["client"],
+            client_position,
             self.positions["switch"],
             "DHCPREQUEST",
             callback=lambda: self.animate_request_to_relay(
@@ -1774,11 +1853,26 @@ class DHCPTopologyUI:
 
     def animate_ack_to_client(self, ack):
 
-        self.highlight_device("switch")
+        self.highlight_device(
+            ack.client_id
+        )
+
+        client_position = self.client_positions.get(
+            ack.client_id
+        )
+
+        if client_position is None:
+
+            self.add_log(
+                f"[ERROR] No topology position for "
+                f"{ack.client_id}."
+            )
+
+            return
 
         self.animate_packet(
             self.positions["switch"],
-            self.positions["client"],
+            client_position,
             "DHCPACK",
             callback=lambda: self.complete_ack(
                 ack
@@ -1787,18 +1881,53 @@ class DHCPTopologyUI:
 
     def complete_ack(self, ack):
 
-        self.highlight_device("client")
-
-        self.client.receive_ack(
-            ack.offered_ip,
-            lease_duration=self.server.lease_duration
+        client = self.clients.get(
+            ack.client_id
         )
 
-        self.devices["client"]["ip"] = (
-            self.client.ip_address
+        if client is None:
+
+            self.add_log(
+                f"[ERROR] Client {ack.client_id} not found."
+            )
+
+            return
+
+        self.highlight_device(
+            ack.client_id
         )
 
-        self.finish_dhcp()
+        if ack.message_type == DHCPMessageType.ACK:
+
+            client.receive_ack(
+                ack.offered_ip,
+                lease_duration=self.server.lease_duration
+            )
+
+            self.add_log(
+                f"[SUCCESS] {ack.client_id} received DHCPACK."
+            )
+
+            self.add_log(
+                f"[IP ASSIGNED] "
+                f"{ack.client_id} → "
+                f"{client.ip_address}"
+            )
+
+            self.finish_dhcp(
+                ack.client_id
+            )
+
+        else:
+
+            self.add_log(
+                f"[DHCPNAK] "
+                f"{ack.client_id} request rejected."
+            )
+
+            self.start_button.config(
+                state="normal"
+            )
 
     # ==========================================
     # Finish
